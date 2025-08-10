@@ -1,0 +1,14 @@
+{
+  "manifest_version": 3,
+  "name": "Appleville Timer Labels",
+  "version": "1.0",
+  "description": "Adds remaining time labels to progress bars and logs extra API data.",
+  "permissions": ["scripting", "activeTab"],
+  "host_permissions": ["https://app.appleville.xyz/*"],
+  "content_scripts": [
+    {
+      "matches": ["https://app.appleville.xyz/*"],
+      "js": ["content.js"]
+    }
+  ]
+}
