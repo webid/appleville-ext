@@ -9,6 +9,14 @@
   // Store API data globally
   let apiData = null;
 
+  function formatKeyName(key) {
+    if (!key) return "";
+    return key
+      .split("-")
+      .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+      .join(" ");
+  }
+
   function calculateTimeRemaining(endTimeString) {
     if (!endTimeString) return null;
 
@@ -40,7 +48,9 @@
       );
 
       plotButtons.forEach((button, index) => {
-        const labelsContainer = button.querySelector(".time-labels-container");
+        const labelsContainer = button.parentElement?.querySelector(
+          `.plot-labels-${index}`
+        );
         if (!labelsContainer) return;
 
         // Get plot data from API
@@ -54,10 +64,12 @@
           // Update modifier label
           const modifierLabel =
             labelsContainer.querySelector(".modifier-label");
-          if (modifierLabel && plot.modifier?.endsAt) {
+          if (modifierLabel && plot.modifier?.endsAt && plot.modifier?.key) {
             const modifierTime = calculateTimeRemaining(plot.modifier.endsAt);
             if (modifierTime) {
-              modifierLabel.textContent = `B: ${modifierTime}`;
+              modifierLabel.textContent = `${formatKeyName(
+                plot.modifier.key
+              )}\n${modifierTime}`;
             } else {
               modifierLabel.remove(); // Remove if expired
             }
@@ -65,10 +77,12 @@
 
           // Update seed label
           const seedLabel = labelsContainer.querySelector(".seed-label");
-          if (seedLabel && plot.seed?.endsAt) {
+          if (seedLabel && plot.seed?.endsAt && plot.seed?.key) {
             const seedTime = calculateTimeRemaining(plot.seed.endsAt);
             if (seedTime) {
-              seedLabel.textContent = `S: ${seedTime}`;
+              seedLabel.textContent = `${formatKeyName(
+                plot.seed.key
+              )}\n${seedTime}`;
             } else {
               seedLabel.remove(); // Remove if expired
             }
@@ -99,12 +113,19 @@
       );
 
       plotButtons.forEach((button, index) => {
-        // Avoid duplicate labels
-        if (button.querySelector(".time-label")) return;
+        // Remove any existing labels below this button
+        const existingLabels = button.parentElement?.querySelector(
+          `.plot-labels-${index}`
+        );
+        if (existingLabels) {
+          existingLabels.remove();
+        }
 
         // Get plot data from API
         let modifierTime = null;
         let seedTime = null;
+        let modifierKey = null;
+        let seedKey = null;
 
         if (
           apiData &&
@@ -115,66 +136,76 @@
 
           if (plot.modifier?.endsAt) {
             modifierTime = calculateTimeRemaining(plot.modifier.endsAt);
+            modifierKey = plot.modifier.key;
           }
 
           if (plot.seed?.endsAt) {
             seedTime = calculateTimeRemaining(plot.seed.endsAt);
+            seedKey = plot.seed.key;
           }
         }
 
-        // Create labels container
-        const labelsContainer = document.createElement("div");
-        labelsContainer.className = "time-labels-container";
-        labelsContainer.style.position = "absolute";
-        labelsContainer.style.top = "0";
-        labelsContainer.style.left = "0";
-        labelsContainer.style.right = "0";
-        labelsContainer.style.bottom = "0";
-        labelsContainer.style.pointerEvents = "none";
-        labelsContainer.style.zIndex = "10";
-
-        // Add modifier label if available (top-right)
-        if (modifierTime) {
-          const modifierLabel = document.createElement("span");
-          modifierLabel.className = "time-label modifier-label";
-          modifierLabel.textContent = `B: ${modifierTime}`;
-          modifierLabel.style.position = "absolute";
-          modifierLabel.style.top = "0";
-          modifierLabel.style.right = "0";
-          modifierLabel.style.padding = "2px 4px";
-          modifierLabel.style.background = "rgba(255, 255, 255, 0.9)";
-          modifierLabel.style.fontWeight = "bold";
-          modifierLabel.style.fontSize = "11px";
-          modifierLabel.style.fontFamily =
+        // Only create labels if we have data
+        if (modifierTime || seedTime) {
+          // Create labels container below the button
+          const labelsContainer = document.createElement("div");
+          labelsContainer.className = `plot-labels-${index}`;
+          labelsContainer.style.marginTop = "4px";
+          labelsContainer.style.display = "flex";
+          labelsContainer.style.flexDirection = "column";
+          labelsContainer.style.gap = "2px";
+          labelsContainer.style.alignItems = "center";
+          labelsContainer.style.fontSize = "10px";
+          labelsContainer.style.fontFamily =
             "monospace, 'Courier New', monospace";
-          modifierLabel.style.color = "#000";
-          modifierLabel.style.borderRadius = "2px";
-          modifierLabel.style.letterSpacing = "0.5px";
-          labelsContainer.appendChild(modifierLabel);
-        }
+          labelsContainer.style.fontWeight = "bold";
+          labelsContainer.style.width = "120px"; // Match button width
 
-        // Add seed label if available (bottom-left)
-        if (seedTime) {
-          const seedLabel = document.createElement("span");
-          seedLabel.className = "time-label seed-label";
-          seedLabel.textContent = `S: ${seedTime}`;
-          seedLabel.style.position = "absolute";
-          seedLabel.style.bottom = "0";
-          seedLabel.style.left = "0";
-          seedLabel.style.padding = "2px 4px";
-          seedLabel.style.background = "rgba(255, 255, 255, 0.9)";
-          seedLabel.style.fontWeight = "bold";
-          seedLabel.style.fontSize = "11px";
-          seedLabel.style.fontFamily = "monospace, 'Courier New', monospace";
-          seedLabel.style.color = "#000";
-          seedLabel.style.borderRadius = "2px";
-          seedLabel.style.letterSpacing = "0.5px";
-          labelsContainer.appendChild(seedLabel);
-        }
+          // Add modifier label if available
+          if (modifierTime && modifierKey) {
+            const modifierLabel = document.createElement("div");
+            modifierLabel.className = "time-label modifier-label";
+            modifierLabel.textContent = `${formatKeyName(
+              modifierKey
+            )}\n${modifierTime}`;
+            modifierLabel.style.padding = "4px 6px";
+            modifierLabel.style.background = "rgba(255, 193, 7, 0.9)"; // Yellow/amber background for booster
+            modifierLabel.style.color = "#000";
+            modifierLabel.style.borderRadius = "3px";
+            modifierLabel.style.border = "1px solid #ffc107";
+            modifierLabel.style.textAlign = "center";
+            modifierLabel.style.letterSpacing = "0.3px";
+            modifierLabel.style.width = "100%";
+            modifierLabel.style.whiteSpace = "pre-line";
+            modifierLabel.style.fontSize = "9px";
+            modifierLabel.style.lineHeight = "1.2";
+            labelsContainer.appendChild(modifierLabel);
+          }
 
-        // Only add container if we have labels
-        if (labelsContainer.children.length > 0) {
-          button.appendChild(labelsContainer);
+          // Add seed label if available
+          if (seedTime && seedKey) {
+            const seedLabel = document.createElement("div");
+            seedLabel.className = "time-label seed-label";
+            seedLabel.textContent = `${formatKeyName(seedKey)}\n${seedTime}`;
+            seedLabel.style.padding = "4px 6px";
+            seedLabel.style.background = "rgba(76, 175, 80, 0.9)"; // Green background for seed
+            seedLabel.style.color = "#fff";
+            seedLabel.style.borderRadius = "3px";
+            seedLabel.style.border = "1px solid #4caf50";
+            seedLabel.style.textAlign = "center";
+            seedLabel.style.letterSpacing = "0.3px";
+            seedLabel.style.width = "100%";
+            seedLabel.style.whiteSpace = "pre-line";
+            seedLabel.style.fontSize = "9px";
+            seedLabel.style.lineHeight = "1.2";
+            labelsContainer.appendChild(seedLabel);
+          }
+
+          // Insert the labels container after the button in the flex container
+          button.parentElement?.insertBefore(
+            labelsContainer,
+            button.nextSibling
+          );
         }
       });
     } catch (error) {
@@ -186,7 +217,7 @@
     try {
       // Remove old labels
       document
-        .querySelectorAll(".time-labels-container")
+        .querySelectorAll('[class^="plot-labels-"]')
         .forEach((el) => el.remove());
       addLabels();
     } catch (error) {
