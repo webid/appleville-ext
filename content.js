@@ -9,12 +9,54 @@
   // Store API data globally
   let apiData = null;
 
+  // Track which timers have already notified to prevent multiple beeps
+  let notifiedTimers = new Set();
+
   function formatKeyName(key) {
     if (!key) return "";
     return key
       .split("-")
       .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
       .join(" ");
+  }
+
+  function playNotificationSound() {
+    try {
+      // Create a simple beep sound using Web Audio API
+      const audioContext = new (window.AudioContext ||
+        window.webkitAudioContext)();
+      const oscillator = audioContext.createOscillator();
+      const gainNode = audioContext.createGain();
+
+      oscillator.connect(gainNode);
+      gainNode.connect(audioContext.destination);
+
+      oscillator.frequency.setValueAtTime(800, audioContext.currentTime); // 800Hz beep
+      oscillator.type = "sine";
+
+      gainNode.gain.setValueAtTime(0.3, audioContext.currentTime); // Volume
+      gainNode.gain.exponentialRampToValueAtTime(
+        0.01,
+        audioContext.currentTime + 0.5
+      );
+
+      oscillator.start(audioContext.currentTime);
+      oscillator.stop(audioContext.currentTime + 0.5);
+
+      console.log("🔔 Timer notification sound played!");
+    } catch (error) {
+      console.error("Error playing notification sound:", error);
+      // Fallback: try to play a simple beep using HTML5 audio
+      try {
+        const audio = new Audio(
+          "data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhBSuBzvLZiTYIG2m98OScTgwOUarm7blmGgU7k9n1unEiBC13yO/eizEIHWq+8+OWT"
+        );
+        audio.volume = 0.3;
+        audio.play();
+      } catch (fallbackError) {
+        console.error("Fallback audio also failed:", fallbackError);
+      }
+    }
   }
 
   function calculateTimeRemaining(endTimeString) {
@@ -66,11 +108,25 @@
             labelsContainer.querySelector(".modifier-label");
           if (modifierLabel && plot.modifier?.endsAt && plot.modifier?.key) {
             const modifierTime = calculateTimeRemaining(plot.modifier.endsAt);
+            const timerKey = `modifier-${index}-${plot.modifier.key}`;
+
             if (modifierTime) {
               modifierLabel.textContent = `${formatKeyName(
                 plot.modifier.key
               )}\n${modifierTime}`;
+              // Remove from notified set if timer is active again
+              notifiedTimers.delete(timerKey);
             } else {
+              // Timer expired - check if we should notify
+              if (!notifiedTimers.has(timerKey)) {
+                playNotificationSound();
+                notifiedTimers.add(timerKey);
+                console.log(
+                  `🔔 Booster timer expired: ${formatKeyName(
+                    plot.modifier.key
+                  )} on plot ${index + 1}`
+                );
+              }
               modifierLabel.remove(); // Remove if expired
             }
           }
@@ -79,11 +135,25 @@
           const seedLabel = labelsContainer.querySelector(".seed-label");
           if (seedLabel && plot.seed?.endsAt && plot.seed?.key) {
             const seedTime = calculateTimeRemaining(plot.seed.endsAt);
+            const timerKey = `seed-${index}-${plot.seed.key}`;
+
             if (seedTime) {
               seedLabel.textContent = `${formatKeyName(
                 plot.seed.key
               )}\n${seedTime}`;
+              // Remove from notified set if timer is active again
+              notifiedTimers.delete(timerKey);
             } else {
+              // Timer expired - check if we should notify
+              if (!notifiedTimers.has(timerKey)) {
+                playNotificationSound();
+                notifiedTimers.add(timerKey);
+                console.log(
+                  `🔔 Seed timer expired: ${formatKeyName(
+                    plot.seed.key
+                  )} on plot ${index + 1}`
+                );
+              }
               seedLabel.remove(); // Remove if expired
             }
           }
@@ -257,6 +327,8 @@
         console.log("API data type:", typeof data);
         console.log("API data keys:", Object.keys(data));
         apiData = data; // Store API data globally
+        // Reset notification tracking when new data is loaded
+        notifiedTimers.clear();
         addLabels(); // Add labels after successful fetch
         updateTimerLabels(); // Update existing labels with new data
       })
@@ -277,8 +349,8 @@
   // Update timer labels every second (for smooth seconds countdown)
   setInterval(updateTimerLabels, 1000);
 
-  // Refresh API data every 5 minutes
-  setInterval(fetchAPI, 300000);
+  // Refresh API data every 1 minute
+  setInterval(fetchAPI, 60000);
 
   // Watch for DOM changes - but be more specific and prevent loops
   const observer = new MutationObserver((mutations) => {

@@ -66,7 +66,7 @@ A Chrome extension that adds real-time countdown timers to your Appleville farmi
 
 4. **Real-time Updates**
    - Timers update every second automatically
-   - API data refreshes every 5 minutes
+   - API data refreshes every 1 minute
    - Expired timers automatically disappear
 
 ## Example Display
