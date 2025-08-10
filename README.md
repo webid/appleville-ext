@@ -6,6 +6,8 @@ A Chrome extension that adds real-time countdown timers to your Appleville farmi
 
 - **Real-time countdown timers** for both Boosters and Seeds on each plot
 - **Color-coded labels**: Yellow for Boosters, Green for Seeds
+- **Visual urgency indicators**: Darker colors when timers are below 30 minutes
+- **Audio notifications**: Beep sound when timers expire
 - **Formatted item names** (e.g., "quantum-fertilizer" → "Quantum Fertilizer")
 - **Seconds precision** for accurate timing
 - **Automatic updates** every second
@@ -62,24 +64,36 @@ A Chrome extension that adds real-time countdown timers to your Appleville farmi
 3. **Understanding the Labels**
    - **Yellow labels**: Booster timers (e.g., Quantum Fertilizer)
    - **Green labels**: Seed timers (e.g., Royal Apple)
+   - **Darker colors**: Indicate timers below 30 minutes (urgent)
    - **Format**: Item name on top, countdown time below (HH:MM:SS)
 
 4. **Real-time Updates**
    - Timers update every second automatically
    - API data refreshes every 1 minute
    - Expired timers automatically disappear
+   - Audio beep notification when timers expire
 
 ## Example Display
 
 ```
 [Plot Button]
 ┌─────────────────┐
-│ Quantum Fertilizer │  (Yellow background)
+│ Quantum Fertilizer │  (Yellow background - normal)
 │ 08:35:50        │
 └─────────────────┘
 ┌─────────────────┐
-│ Royal Apple     │  (Green background)
+│ Royal Apple     │  (Green background - normal)
 │ 02:52:04        │
+└─────────────────┘
+
+[Plot Button with Urgent Timer]
+┌─────────────────┐
+│ Quantum Fertilizer │  (Dark orange background - urgent <30min)
+│ 00:25:30        │
+└─────────────────┘
+┌─────────────────┐
+│ Royal Apple     │  (Dark green background - urgent <30min)
+│ 00:15:45        │
 └─────────────────┘
 ```
 

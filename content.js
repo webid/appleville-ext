@@ -83,6 +83,48 @@
     );
   }
 
+  function getTimerColors(timeRemaining, isBooster) {
+    if (!timeRemaining) return { background: "", border: "", text: "" };
+
+    // Parse time to get total minutes
+    const [hours, minutes] = timeRemaining.split(":").map(Number);
+    const totalMinutes = hours * 60 + minutes;
+
+    if (isBooster) {
+      if (totalMinutes < 30) {
+        // Darker yellow/amber for urgent booster timers
+        return {
+          background: "rgba(255, 152, 0, 0.9)", // Dark orange
+          border: "#ff9800",
+          text: "#000",
+        };
+      } else {
+        // Normal yellow for booster timers
+        return {
+          background: "rgba(255, 193, 7, 0.9)", // Yellow/amber
+          border: "#ffc107",
+          text: "#000",
+        };
+      }
+    } else {
+      if (totalMinutes < 30) {
+        // Darker green for urgent seed timers
+        return {
+          background: "rgba(27, 94, 32, 0.9)", // Dark green
+          border: "#1b5e20",
+          text: "#fff",
+        };
+      } else {
+        // Normal green for seed timers
+        return {
+          background: "rgba(76, 175, 80, 0.9)", // Green
+          border: "#4caf50",
+          text: "#fff",
+        };
+      }
+    }
+  }
+
   function updateTimerLabels() {
     try {
       const plotButtons = document.querySelectorAll(
@@ -114,6 +156,13 @@
               modifierLabel.textContent = `${formatKeyName(
                 plot.modifier.key
               )}\n${modifierTime}`;
+
+              // Update colors based on time remaining
+              const colors = getTimerColors(modifierTime, true);
+              modifierLabel.style.background = colors.background;
+              modifierLabel.style.color = colors.text;
+              modifierLabel.style.border = `1px solid ${colors.border}`;
+
               // Remove from notified set if timer is active again
               notifiedTimers.delete(timerKey);
             } else {
@@ -141,6 +190,13 @@
               seedLabel.textContent = `${formatKeyName(
                 plot.seed.key
               )}\n${seedTime}`;
+
+              // Update colors based on time remaining
+              const colors = getTimerColors(seedTime, false);
+              seedLabel.style.background = colors.background;
+              seedLabel.style.color = colors.text;
+              seedLabel.style.border = `1px solid ${colors.border}`;
+
               // Remove from notified set if timer is active again
               notifiedTimers.delete(timerKey);
             } else {
@@ -233,16 +289,17 @@
 
           // Add modifier label if available
           if (modifierTime && modifierKey) {
+            const colors = getTimerColors(modifierTime, true);
             const modifierLabel = document.createElement("div");
             modifierLabel.className = "time-label modifier-label";
             modifierLabel.textContent = `${formatKeyName(
               modifierKey
             )}\n${modifierTime}`;
             modifierLabel.style.padding = "4px 6px";
-            modifierLabel.style.background = "rgba(255, 193, 7, 0.9)"; // Yellow/amber background for booster
-            modifierLabel.style.color = "#000";
+            modifierLabel.style.background = colors.background;
+            modifierLabel.style.color = colors.text;
             modifierLabel.style.borderRadius = "3px";
-            modifierLabel.style.border = "1px solid #ffc107";
+            modifierLabel.style.border = `1px solid ${colors.border}`;
             modifierLabel.style.textAlign = "center";
             modifierLabel.style.letterSpacing = "0.3px";
             modifierLabel.style.width = "100%";
@@ -254,14 +311,15 @@
 
           // Add seed label if available
           if (seedTime && seedKey) {
+            const colors = getTimerColors(seedTime, false);
             const seedLabel = document.createElement("div");
             seedLabel.className = "time-label seed-label";
             seedLabel.textContent = `${formatKeyName(seedKey)}\n${seedTime}`;
             seedLabel.style.padding = "4px 6px";
-            seedLabel.style.background = "rgba(76, 175, 80, 0.9)"; // Green background for seed
-            seedLabel.style.color = "#fff";
+            seedLabel.style.background = colors.background;
+            seedLabel.style.color = colors.text;
             seedLabel.style.borderRadius = "3px";
-            seedLabel.style.border = "1px solid #4caf50";
+            seedLabel.style.border = `1px solid ${colors.border}`;
             seedLabel.style.textAlign = "center";
             seedLabel.style.letterSpacing = "0.3px";
             seedLabel.style.width = "100%";
