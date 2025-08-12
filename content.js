@@ -304,7 +304,7 @@
             modifierLabel.style.letterSpacing = "0.3px";
             modifierLabel.style.width = "100%";
             modifierLabel.style.whiteSpace = "pre-line";
-            modifierLabel.style.fontSize = "9px";
+            modifierLabel.style.fontSize = "14px";
             modifierLabel.style.lineHeight = "1.2";
             labelsContainer.appendChild(modifierLabel);
           }
@@ -324,7 +324,7 @@
             seedLabel.style.letterSpacing = "0.3px";
             seedLabel.style.width = "100%";
             seedLabel.style.whiteSpace = "pre-line";
-            seedLabel.style.fontSize = "9px";
+            seedLabel.style.fontSize = "14px";
             seedLabel.style.lineHeight = "1.2";
             labelsContainer.appendChild(seedLabel);
           }
