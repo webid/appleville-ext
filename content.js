@@ -407,8 +407,8 @@
   // Update timer labels every second (for smooth seconds countdown)
   setInterval(updateTimerLabels, 1000);
 
-  // Refresh API data every 1 minute
-  setInterval(fetchAPI, 60000);
+  // Refresh API data every 5 seconds
+  setInterval(fetchAPI, 5000);
 
   // Watch for DOM changes - but be more specific and prevent loops
   const observer = new MutationObserver((mutations) => {

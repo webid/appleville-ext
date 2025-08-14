@@ -167,3 +167,14 @@ If you encounter issues:
 ## License
 
 This extension is provided as-is for personal use with Appleville.
+
+
+## Image paths
+Seeds
+Onion Seeds -> https://app.appleville.xyz/img/crops/onion/pack.png
+Royal Apple Seed -> https://app.appleville.xyz/img/crops/royal-apple/pack.png
+
+Boosters
+Deadly Mix -> https://app.appleville.xyz/img/modifiers/deadly-mix.png
+Fertilizer -> https://app.appleville.xyz/img/modifiers/fertilizer.png
+Quantum Fertilizer -> https://app.appleville.xyz/img/modifiers/fertilizer.png
