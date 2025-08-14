@@ -16,6 +16,14 @@
   // Track which timers have already notified to prevent multiple beeps
   let notifiedTimers = new Set();
 
+  // Map of wallet addresses to player names
+  const addressToNameMap = {
+    "0x9a12a221350c7cf93be8eff22822e4a32f2d1675": "opeculiar",
+    // Add more mappings here as needed
+    // "0xd73acc2272f7524df092502b983001a199cc9d61": "player2",
+    // "0x46f18e7a2a4ba26e444d65ed8e9728d73d9faa20": "player3",
+  };
+
   function formatKeyName(key) {
     if (!key) return "";
     return key
@@ -36,17 +44,30 @@
     );
   }
 
+  function getDisplayName(address) {
+    // Check if we have a custom name mapping for this address
+    if (addressToNameMap[address]) {
+      return addressToNameMap[address];
+    }
+    // Otherwise return the shortened address
+    return shortenWalletAddress(address);
+  }
+
   function findPlayerByShortAddress(shortAddress, players) {
     if (!shortAddress || !players) {
       return null;
     }
 
-    // Remove any extra formatting that might be in the displayed address
-    const cleanShortAddress = shortAddress.replace(/[^\w]/g, "");
-
     const foundPlayer = players.find((player) => {
+      // Check if the shortAddress matches a custom name
+      if (addressToNameMap[player.walletAddress] === shortAddress) {
+        return true;
+      }
+
+      // Otherwise check if it matches the shortened address
       const playerShort = shortenWalletAddress(player.walletAddress);
       const cleanPlayerShort = playerShort.replace(/[^\w]/g, "");
+      const cleanShortAddress = shortAddress.replace(/[^\w]/g, "");
       return cleanPlayerShort === cleanShortAddress;
     });
 
@@ -73,17 +94,13 @@
           return;
         }
 
-        // Check if Current AP tab is active
-        const currentApTab = container.querySelector(
+        // Check which tab is active
+        const activeTab = container.querySelector(
           'button[class*="bg-white text-blue-600"]'
         );
-        const currentApTabText = currentApTab?.textContent?.toLowerCase();
-        const isCurrentApActive = currentApTabText?.includes("current ap");
-
-        // Only enhance if Current AP tab is active
-        if (!isCurrentApActive) {
-          return;
-        }
+        const activeTabText = activeTab?.textContent?.toLowerCase();
+        const isCurrentApActive = activeTabText?.includes("current ap");
+        const isTotalApActive = activeTabText?.includes("total ap");
 
         // Find player entries in the leaderboard - try multiple selectors
         let playerEntries = container.querySelectorAll(
@@ -118,37 +135,64 @@
           }
 
           const rank = parseInt(rankElement.textContent.trim());
-          const shortAddress = addressElement.textContent.trim();
+          const currentDisplayText = addressElement.textContent.trim();
 
-          // Find the player data from API by rank first, then verify address
-          let player = currentAp.topUsers.find((p) => p.rank === rank);
-
-          if (!player) {
-            // Fallback to address matching if rank matching fails
-            player = findPlayerByShortAddress(shortAddress, currentAp.topUsers);
+          // Get the appropriate player data based on active tab
+          let player = null;
+          if (isCurrentApActive) {
+            player = currentAp.topUsers.find((p) => p.rank === rank);
+            if (!player) {
+              player = findPlayerByShortAddress(
+                currentDisplayText,
+                currentAp.topUsers
+              );
+            }
+          } else if (isTotalApActive) {
+            player = totalApEarned.topUsers?.find((p) => p.rank === rank);
+            if (!player) {
+              player = findPlayerByShortAddress(
+                currentDisplayText,
+                totalApEarned.topUsers || []
+              );
+            }
           }
 
           if (player) {
-            // Remove existing AP info if present
-            const existingApInfo = addressContainer.querySelector(".ap-info");
-            if (existingApInfo) {
-              existingApInfo.remove();
+            // Replace address with custom name if available
+            const displayName = getDisplayName(player.walletAddress);
+
+            // Only update if the display name is different from current text
+            if (displayName !== currentDisplayText) {
+              // Check if we already replaced it (to avoid infinite loops)
+              if (!addressElement.dataset.replaced) {
+                addressElement.textContent = displayName;
+                addressElement.dataset.replaced = "true";
+              }
             }
 
-            // Create AP info element
-            const apInfo = document.createElement("div");
-            apInfo.className = "ap-info";
-            apInfo.textContent = `${formatAP(player.ap)} AP`;
-            apInfo.style.cssText = `
-              font-size: 12px;
-              color: #666;
-              font-weight: bold;
-              white-space: nowrap;
-              margin-left: auto;
-            `;
+            // Only add AP info for Current AP tab
+            if (isCurrentApActive) {
+              // Remove existing AP info if present
+              const existingApInfo = addressContainer.querySelector(".ap-info");
+              if (existingApInfo) {
+                existingApInfo.remove();
+              }
 
-            // Add AP info to the address container
-            addressContainer.appendChild(apInfo);
+              // Create AP info element
+              const apInfo = document.createElement("div");
+              apInfo.className = "ap-info";
+              apInfo.textContent = `${formatAP(player.ap)} AP`;
+              apInfo.style.cssText = `
+                font-size: 12px;
+                color: #666;
+                font-weight: bold;
+                white-space: nowrap;
+                margin-left: auto;
+              `;
+
+              // Add AP info to the address container
+              addressContainer.appendChild(apInfo);
+            }
           }
         });
       });
@@ -736,13 +780,31 @@
   // Also update leaderboard display every 2 seconds for more responsive updates
   setInterval(() => {
     if (leaderboardData) {
+      // Clear replacement flags to allow re-processing when switching tabs
+      document
+        .querySelectorAll('div[class*="font-mono"][data-replaced]')
+        .forEach((el) => {
+          delete el.dataset.replaced;
+        });
       enhanceLeaderboardDisplay();
     }
   }, 2000);
 
-  // Make the enhanceLeaderboardDisplay function globally accessible for manual testing
+  // Make functions globally accessible for manual testing and management
   window.enhanceLeaderboardDisplay = enhanceLeaderboardDisplay;
   window.createPlayerRankInfo = createPlayerRankInfo;
+
+  // Helper function to add new address mappings
+  window.addPlayerName = function (address, name) {
+    addressToNameMap[address] = name;
+    // Clear replacement flags and refresh display
+    document
+      .querySelectorAll('div[class*="font-mono"][data-replaced]')
+      .forEach((el) => {
+        delete el.dataset.replaced;
+      });
+    enhanceLeaderboardDisplay();
+  };
 
   // Refresh API data every 5 seconds
   setInterval(fetchAPI, 5000);
