@@ -154,6 +154,12 @@
             return;
           }
 
+          // Always clean up AP info first for all entries
+          const existingApInfo = addressContainer.querySelector(".ap-info");
+          if (existingApInfo) {
+            existingApInfo.remove();
+          }
+
           const rank = parseInt(rankElement.textContent.trim());
           const currentDisplayText = addressElement.textContent.trim();
 
@@ -195,12 +201,6 @@
 
             // Only add AP info for Current AP tab
             if (isCurrentApActive) {
-              // Remove existing AP info if present
-              const existingApInfo = addressContainer.querySelector(".ap-info");
-              if (existingApInfo) {
-                existingApInfo.remove();
-              }
-
               // Create AP info element
               const apInfo = document.createElement("div");
               apInfo.className = "ap-info";
@@ -384,11 +384,33 @@
     }
   }
 
+  // Track if audio context has been initialized after user gesture
+  let audioContextInitialized = false;
+  let audioContext = null;
+
+  function initializeAudioContext() {
+    if (!audioContextInitialized) {
+      try {
+        audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        audioContextInitialized = true;
+      } catch (error) {
+        // Audio context not supported
+      }
+    }
+  }
+
   function playNotificationSound() {
     try {
-      // Create a simple beep sound using Web Audio API
-      const audioContext = new (window.AudioContext ||
-        window.webkitAudioContext)();
+      // Only try to play sound if audio context is initialized
+      if (!audioContextInitialized || !audioContext) {
+        return; // Silent fail if audio not ready
+      }
+
+      // Resume audio context if it's suspended
+      if (audioContext.state === "suspended") {
+        audioContext.resume();
+      }
+
       const oscillator = audioContext.createOscillator();
       const gainNode = audioContext.createGain();
 
@@ -407,16 +429,7 @@
       oscillator.start(audioContext.currentTime);
       oscillator.stop(audioContext.currentTime + 0.5);
     } catch (error) {
-      // Fallback: try to play a simple beep using HTML5 audio
-      try {
-        const audio = new Audio(
-          "data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhBSuBzvLZiTYIG2m98OScTgwOUarm7blmGgU7k9n1unEiBC13yO/eizEIHWq+8+OWT"
-        );
-        audio.volume = 0.3;
-        audio.play();
-      } catch (fallbackError) {
-        // Silent error handling
-      }
+      // Silent error handling - don't spam console with audio errors
     }
   }
 
@@ -823,6 +836,20 @@
       });
   }
 
+  // Initialize audio context on first user interaction
+  function handleFirstUserInteraction() {
+    initializeAudioContext();
+    // Remove listeners after first interaction
+    document.removeEventListener("click", handleFirstUserInteraction);
+    document.removeEventListener("keydown", handleFirstUserInteraction);
+    document.removeEventListener("touchstart", handleFirstUserInteraction);
+  }
+
+  // Add listeners for user interaction to enable audio
+  document.addEventListener("click", handleFirstUserInteraction);
+  document.addEventListener("keydown", handleFirstUserInteraction);
+  document.addEventListener("touchstart", handleFirstUserInteraction);
+
   // Initial run
   addLabels();
 
@@ -965,8 +992,11 @@
         const leaderboardTab =
           document.querySelector('[aria-labelledby*="leaderboard"]') ||
           document.querySelector('button[class*="leaderboard"]') ||
-          document.querySelector(
-            '[data-state="inactive"]:has(h1:contains("Leaderboard"))'
+          Array.from(document.querySelectorAll('[data-state="inactive"]')).find(
+            (el) => {
+              const h1 = el.querySelector("h1");
+              return h1 && h1.textContent.toLowerCase().includes("leaderboard");
+            }
           );
 
         if (leaderboardTab) {
@@ -987,8 +1017,11 @@
       const leaderboardTab =
         document.querySelector('[aria-labelledby*="leaderboard"]') ||
         document.querySelector('button[class*="leaderboard"]') ||
-        document.querySelector(
-          '[data-state="inactive"]:has(h1:contains("Leaderboard"))'
+        Array.from(document.querySelectorAll('[data-state="inactive"]')).find(
+          (el) => {
+            const h1 = el.querySelector("h1");
+            return h1 && h1.textContent.toLowerCase().includes("leaderboard");
+          }
         );
 
       if (leaderboardTab) {
