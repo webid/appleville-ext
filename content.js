@@ -2,12 +2,16 @@
   const API_URL =
     "https://app.appleville.xyz/api/trpc/core.getState?batch=1&input=%7B%220%22%3A%7B%22json%22%3Anull%2C%22meta%22%3A%7B%22values%22%3A%5B%22undefined%22%5D%7D%7D%7D";
 
+  const LEADERBOARD_API_URL =
+    "https://app.appleville.xyz/api/trpc/stats.getLeaderboard?batch=20";
+
   // Safety mechanism to prevent excessive updates
   let lastUpdateTime = 0;
   const MIN_UPDATE_INTERVAL = 1000; // Minimum 1 second between updates
 
   // Store API data globally
   let apiData = null;
+  let leaderboardData = null;
 
   // Track which timers have already notified to prevent multiple beeps
   let notifiedTimers = new Set();
@@ -18,6 +22,317 @@
       .split("-")
       .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
       .join(" ");
+  }
+
+  function formatAP(ap) {
+    // Show exact numbers with international formatting (commas for thousands)
+    return ap.toLocaleString();
+  }
+
+  function shortenWalletAddress(address) {
+    if (!address || address.length < 10) return address;
+    return (
+      address.substring(0, 6) + "..." + address.substring(address.length - 4)
+    );
+  }
+
+  function findPlayerByShortAddress(shortAddress, players) {
+    if (!shortAddress || !players) {
+      return null;
+    }
+
+    // Remove any extra formatting that might be in the displayed address
+    const cleanShortAddress = shortAddress.replace(/[^\w]/g, "");
+
+    const foundPlayer = players.find((player) => {
+      const playerShort = shortenWalletAddress(player.walletAddress);
+      const cleanPlayerShort = playerShort.replace(/[^\w]/g, "");
+      return cleanPlayerShort === cleanShortAddress;
+    });
+
+    return foundPlayer;
+  }
+
+  function enhanceLeaderboardDisplay() {
+    try {
+      if (!leaderboardData?.result?.data?.json) {
+        return;
+      }
+
+      const { currentAp, totalApEarned } = leaderboardData.result.data.json;
+
+      // Find leaderboard containers
+      const leaderboardContainers = document.querySelectorAll(
+        '[data-state="active"]'
+      );
+
+      leaderboardContainers.forEach((container) => {
+        // Check if this is the leaderboard tab
+        const h1 = container.querySelector("h1");
+        if (!h1 || !h1.textContent.toLowerCase().includes("leaderboard")) {
+          return;
+        }
+
+        // Check if Current AP tab is active
+        const currentApTab = container.querySelector(
+          'button[class*="bg-white text-blue-600"]'
+        );
+        const currentApTabText = currentApTab?.textContent?.toLowerCase();
+        const isCurrentApActive = currentApTabText?.includes("current ap");
+
+        // Only enhance if Current AP tab is active
+        if (!isCurrentApActive) {
+          return;
+        }
+
+        // Find player entries in the leaderboard - try multiple selectors
+        let playerEntries = container.querySelectorAll(
+          'div[class*="flex items-center justify-between"]'
+        );
+
+        // If no entries found, try alternative selectors
+        if (playerEntries.length === 0) {
+          playerEntries = container.querySelectorAll(
+            'div[class*="flex"][class*="items-center"][class*="justify-between"]'
+          );
+        }
+
+        // If still no entries, try looking for any div with rank numbers
+        if (playerEntries.length === 0) {
+          playerEntries = container.querySelectorAll(
+            'div:has(div[class*="bg-blue-500"])'
+          );
+        }
+
+        playerEntries.forEach((entry, index) => {
+          const rankElement = entry.querySelector('div[class*="bg-blue-500"]');
+          const addressContainer = entry.querySelector(
+            'div[class*="flex items-center gap-3"]'
+          );
+          const addressElement = addressContainer?.querySelector(
+            'div[class*="font-mono"]'
+          );
+
+          if (!rankElement || !addressElement) {
+            return;
+          }
+
+          const rank = parseInt(rankElement.textContent.trim());
+          const shortAddress = addressElement.textContent.trim();
+
+          // Find the player data from API by rank first, then verify address
+          let player = currentAp.topUsers.find((p) => p.rank === rank);
+
+          if (!player) {
+            // Fallback to address matching if rank matching fails
+            player = findPlayerByShortAddress(shortAddress, currentAp.topUsers);
+          }
+
+          if (player) {
+            // Remove existing AP info if present
+            const existingApInfo = addressContainer.querySelector(".ap-info");
+            if (existingApInfo) {
+              existingApInfo.remove();
+            }
+
+            // Create AP info element
+            const apInfo = document.createElement("div");
+            apInfo.className = "ap-info";
+            apInfo.textContent = `${formatAP(player.ap)} AP`;
+            apInfo.style.cssText = `
+              font-size: 12px;
+              color: #666;
+              font-weight: bold;
+              white-space: nowrap;
+              margin-left: auto;
+            `;
+
+            // Add AP info to the address container
+            addressContainer.appendChild(apInfo);
+          }
+        });
+      });
+    } catch (error) {
+      // Silent error handling
+    }
+  }
+
+  function createPlayerRankInfo() {
+    try {
+      if (!leaderboardData?.result?.data?.json) return;
+
+      const { currentAp, totalApEarned } = leaderboardData.result.data.json;
+
+      // Remove existing player rank info if present
+      const existingInfo = document.querySelector(".player-rank-info");
+      if (existingInfo) {
+        existingInfo.remove();
+      }
+
+      // Find the main content area (before plots)
+      const mainContent = document.querySelector("main") || document.body;
+
+      // Create player rank info container
+      const rankInfoContainer = document.createElement("div");
+      rankInfoContainer.className = "player-rank-info";
+      rankInfoContainer.style.cssText = `
+        background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+        border-radius: 8px;
+        padding: 8px 12px;
+        margin: 8px 0;
+        color: white;
+        font-family: inherit;
+        box-shadow: 0 2px 8px rgba(59, 130, 246, 0.2);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        width: 100%;
+        box-sizing: border-box;
+        backdrop-filter: blur(8px);
+      `;
+
+      // Create header
+      const header = document.createElement("div");
+      header.style.cssText = `
+        font-size: 12px;
+        font-weight: 600;
+        margin-bottom: 6px;
+        text-align: center;
+        opacity: 0.9;
+        letter-spacing: 0.5px;
+      `;
+      header.textContent = "🏆 Your Rankings";
+      rankInfoContainer.appendChild(header);
+
+      // Create stats grid
+      const statsGrid = document.createElement("div");
+      statsGrid.style.cssText = `
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 6px;
+      `;
+
+      // Current AP stats
+      const currentApStats = document.createElement("div");
+      currentApStats.style.cssText = `
+        background: rgba(255, 255, 255, 0.15);
+        border-radius: 6px;
+        padding: 6px;
+        text-align: center;
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        backdrop-filter: blur(4px);
+      `;
+
+      const currentApLabel = document.createElement("div");
+      currentApLabel.style.cssText = `
+        font-size: 9px;
+        opacity: 0.8;
+        margin-bottom: 2px;
+        line-height: 1;
+        font-weight: 500;
+      `;
+      currentApLabel.textContent = "Current AP Held";
+
+      const currentApRank = document.createElement("div");
+      currentApRank.style.cssText = `
+        font-size: 14px;
+        font-weight: 700;
+        margin-bottom: 2px;
+        line-height: 1;
+      `;
+      currentApRank.textContent = currentAp.currentUserRank
+        ? `#${currentAp.currentUserRank}`
+        : "N/A";
+
+      const currentApValue = document.createElement("div");
+      currentApValue.style.cssText = `
+        font-size: 10px;
+        opacity: 0.9;
+        line-height: 1;
+        font-weight: 500;
+      `;
+      currentApValue.textContent = formatAP(currentAp.currentUserValue || 0);
+
+      currentApStats.appendChild(currentApLabel);
+      currentApStats.appendChild(currentApRank);
+      currentApStats.appendChild(currentApValue);
+
+      // Total AP Earned stats
+      const totalApStats = document.createElement("div");
+      totalApStats.style.cssText = `
+        background: rgba(255, 255, 255, 0.15);
+        border-radius: 6px;
+        padding: 6px;
+        text-align: center;
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        backdrop-filter: blur(4px);
+      `;
+
+      const totalApLabel = document.createElement("div");
+      totalApLabel.style.cssText = `
+        font-size: 9px;
+        opacity: 0.8;
+        margin-bottom: 2px;
+        line-height: 1;
+        font-weight: 500;
+      `;
+      totalApLabel.textContent = "Total AP Earned";
+
+      const totalApRank = document.createElement("div");
+      totalApRank.style.cssText = `
+        font-size: 14px;
+        font-weight: 700;
+        margin-bottom: 2px;
+        line-height: 1;
+      `;
+      totalApRank.textContent = totalApEarned.currentUserRank
+        ? `#${totalApEarned.currentUserRank}`
+        : "N/A";
+
+      const totalApValue = document.createElement("div");
+      totalApValue.style.cssText = `
+        font-size: 10px;
+        opacity: 0.9;
+        line-height: 1;
+        font-weight: 500;
+      `;
+      totalApValue.textContent = formatAP(totalApEarned.currentUserValue || 0);
+
+      totalApStats.appendChild(totalApLabel);
+      totalApStats.appendChild(totalApRank);
+      totalApStats.appendChild(totalApValue);
+
+      statsGrid.appendChild(currentApStats);
+      statsGrid.appendChild(totalApStats);
+      rankInfoContainer.appendChild(statsGrid);
+
+      // Find the plots container and insert the rank info before it
+      const plotsContainer =
+        document.querySelector('div[class*="grid"]') ||
+        document.querySelector('div[class*="flex"]') ||
+        document.querySelector("main") ||
+        document.body;
+
+      // Look for a container that has plot buttons
+      const plotButtons = document.querySelectorAll(
+        'button[class*="relative flex h-[120px] w-[120px]"]'
+      );
+      if (plotButtons.length > 0) {
+        // Find the common parent container of all plot buttons
+        const firstPlotButton = plotButtons[0];
+        const plotsParent = firstPlotButton.closest(
+          'div[class*="grid"], div[class*="flex"], main, body'
+        );
+
+        if (plotsParent) {
+          plotsParent.insertBefore(rankInfoContainer, plotsParent.firstChild);
+        } else {
+          mainContent.insertBefore(rankInfoContainer, mainContent.firstChild);
+        }
+      } else {
+        mainContent.insertBefore(rankInfoContainer, mainContent.firstChild);
+      }
+    } catch (error) {
+      // Silent error handling
+    }
   }
 
   function playNotificationSound() {
@@ -42,10 +357,7 @@
 
       oscillator.start(audioContext.currentTime);
       oscillator.stop(audioContext.currentTime + 0.5);
-
-      console.log("🔔 Timer notification sound played!");
     } catch (error) {
-      console.error("Error playing notification sound:", error);
       // Fallback: try to play a simple beep using HTML5 audio
       try {
         const audio = new Audio(
@@ -54,7 +366,7 @@
         audio.volume = 0.3;
         audio.play();
       } catch (fallbackError) {
-        console.error("Fallback audio also failed:", fallbackError);
+        // Silent error handling
       }
     }
   }
@@ -170,11 +482,6 @@
               if (!notifiedTimers.has(timerKey)) {
                 playNotificationSound();
                 notifiedTimers.add(timerKey);
-                console.log(
-                  `🔔 Booster timer expired: ${formatKeyName(
-                    plot.modifier.key
-                  )} on plot ${index + 1}`
-                );
               }
               modifierLabel.remove(); // Remove if expired
             }
@@ -204,11 +511,6 @@
               if (!notifiedTimers.has(timerKey)) {
                 playNotificationSound();
                 notifiedTimers.add(timerKey);
-                console.log(
-                  `🔔 Seed timer expired: ${formatKeyName(
-                    plot.seed.key
-                  )} on plot ${index + 1}`
-                );
               }
               seedLabel.remove(); // Remove if expired
             }
@@ -295,7 +597,7 @@
             modifierLabel.textContent = `${formatKeyName(
               modifierKey
             )}\n${modifierTime}`;
-            modifierLabel.style.padding = "4px 6px";
+            modifierLabel.style.padding = "2px 3px";
             modifierLabel.style.background = colors.background;
             modifierLabel.style.color = colors.text;
             modifierLabel.style.borderRadius = "3px";
@@ -304,7 +606,7 @@
             modifierLabel.style.letterSpacing = "0.3px";
             modifierLabel.style.width = "100%";
             modifierLabel.style.whiteSpace = "pre-line";
-            modifierLabel.style.fontSize = "14px";
+            modifierLabel.style.fontSize = "12px";
             modifierLabel.style.lineHeight = "1.2";
             labelsContainer.appendChild(modifierLabel);
           }
@@ -315,7 +617,7 @@
             const seedLabel = document.createElement("div");
             seedLabel.className = "time-label seed-label";
             seedLabel.textContent = `${formatKeyName(seedKey)}\n${seedTime}`;
-            seedLabel.style.padding = "4px 6px";
+            seedLabel.style.padding = "2px 3px";
             seedLabel.style.background = colors.background;
             seedLabel.style.color = colors.text;
             seedLabel.style.borderRadius = "3px";
@@ -324,7 +626,7 @@
             seedLabel.style.letterSpacing = "0.3px";
             seedLabel.style.width = "100%";
             seedLabel.style.whiteSpace = "pre-line";
-            seedLabel.style.fontSize = "14px";
+            seedLabel.style.fontSize = "12px";
             seedLabel.style.lineHeight = "1.2";
             labelsContainer.appendChild(seedLabel);
           }
@@ -361,8 +663,6 @@
   }
 
   function fetchAPI() {
-    console.log("Attempting to fetch API from:", API_URL);
-
     fetch(API_URL, {
       method: "GET",
       headers: {
@@ -371,19 +671,12 @@
       credentials: "include", // Include cookies if needed
     })
       .then((res) => {
-        console.log("API response status:", res.status);
-        console.log("API response headers:", res.headers);
-
         if (!res.ok) {
           throw new Error(`HTTP error! status: ${res.status}`);
         }
-
         return res.json();
       })
       .then((data) => {
-        console.log("Appleville API data:", data);
-        console.log("API data type:", typeof data);
-        console.log("API data keys:", Object.keys(data));
         apiData = data; // Store API data globally
         // Reset notification tracking when new data is loaded
         notifiedTimers.clear();
@@ -391,24 +684,69 @@
         updateTimerLabels(); // Update existing labels with new data
       })
       .catch((err) => {
-        console.error("API fetch error:", err);
-        console.error("Error details:", {
-          message: err.message,
-          stack: err.stack,
-          name: err.name,
-        });
+        // Silent error handling
+      });
+  }
+
+  function fetchLeaderboardAPI() {
+    fetch(LEADERBOARD_API_URL, {
+      method: "GET",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      credentials: "include", // Include cookies if needed
+    })
+      .then((res) => {
+        if (!res.ok) {
+          throw new Error(`HTTP error! status: ${res.status}`);
+        }
+        return res.json();
+      })
+      .then((data) => {
+        leaderboardData = data; // Store leaderboard data globally
+        // Enhance leaderboard display and create player rank info
+        enhanceLeaderboardDisplay();
+        createPlayerRankInfo();
+      })
+      .catch((err) => {
+        // Silent error handling
       });
   }
 
   // Initial run
   addLabels();
-  console.log("Content script loaded and labels added");
+
+  // Initial leaderboard enhancement if data is available
+  if (leaderboardData) {
+    enhanceLeaderboardDisplay();
+    createPlayerRankInfo();
+  }
 
   // Update timer labels every second (for smooth seconds countdown)
   setInterval(updateTimerLabels, 1000);
 
+  // Update leaderboard display and player rank info every 5 seconds
+  setInterval(() => {
+    if (leaderboardData) {
+      enhanceLeaderboardDisplay();
+      createPlayerRankInfo();
+    }
+  }, 5000);
+
+  // Also update leaderboard display every 2 seconds for more responsive updates
+  setInterval(() => {
+    if (leaderboardData) {
+      enhanceLeaderboardDisplay();
+    }
+  }, 2000);
+
+  // Make the enhanceLeaderboardDisplay function globally accessible for manual testing
+  window.enhanceLeaderboardDisplay = enhanceLeaderboardDisplay;
+  window.createPlayerRankInfo = createPlayerRankInfo;
+
   // Refresh API data every 5 seconds
   setInterval(fetchAPI, 5000);
+  setInterval(fetchLeaderboardAPI, 5000); // Refresh leaderboard data every 5 seconds
 
   // Watch for DOM changes - but be more specific and prevent loops
   const observer = new MutationObserver((mutations) => {
@@ -432,9 +770,55 @@
       return false;
     });
 
+    // Check for leaderboard changes
+    const hasLeaderboardChanges = mutations.some((mutation) => {
+      if (mutation.type === "childList") {
+        return Array.from(mutation.addedNodes).some(
+          (node) =>
+            node.nodeType === Node.ELEMENT_NODE &&
+            (node.matches('[data-state="active"]') ||
+              node.querySelector('[data-state="active"]'))
+        );
+      }
+      return false;
+    });
+
     if (hasPlotChanges) {
       debouncedUpdateLabels();
     }
+
+    if (hasLeaderboardChanges) {
+      // Check if leaderboard tab is now active
+      const activeLeaderboard = document.querySelector(
+        '[data-state="active"] h1'
+      );
+      if (
+        activeLeaderboard &&
+        activeLeaderboard.textContent.toLowerCase().includes("leaderboard")
+      ) {
+        setTimeout(() => {
+          enhanceLeaderboardDisplay();
+        }, 100); // Small delay to ensure DOM is fully rendered
+      }
+    }
+
+    // Also check for any tab state changes
+    mutations.forEach((mutation) => {
+      if (
+        mutation.type === "attributes" &&
+        mutation.attributeName === "data-state"
+      ) {
+        const target = mutation.target;
+        if (target.getAttribute("data-state") === "active") {
+          const h1 = target.querySelector("h1");
+          if (h1 && h1.textContent.toLowerCase().includes("leaderboard")) {
+            setTimeout(() => {
+              enhanceLeaderboardDisplay();
+            }, 100);
+          }
+        }
+      }
+    });
   });
 
   observer.observe(document.body, {
@@ -445,11 +829,47 @@
   // Wait for page to be fully loaded before fetching API
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", () => {
-      console.log("DOM fully loaded, scheduling API call");
       setTimeout(fetchAPI, 2000);
+      setTimeout(fetchLeaderboardAPI, 2000); // Schedule leaderboard fetch
+
+      // Add click listener for leaderboard tab
+      setTimeout(() => {
+        const leaderboardTab =
+          document.querySelector('[aria-labelledby*="leaderboard"]') ||
+          document.querySelector('button[class*="leaderboard"]') ||
+          document.querySelector(
+            '[data-state="inactive"]:has(h1:contains("Leaderboard"))'
+          );
+
+        if (leaderboardTab) {
+          leaderboardTab.addEventListener("click", () => {
+            setTimeout(() => {
+              enhanceLeaderboardDisplay();
+            }, 500);
+          });
+        }
+      }, 3000);
     });
   } else {
-    console.log("DOM already loaded, scheduling API call");
     setTimeout(fetchAPI, 2000);
+    setTimeout(fetchLeaderboardAPI, 2000); // Schedule leaderboard fetch
+
+    // Add click listener for leaderboard tab
+    setTimeout(() => {
+      const leaderboardTab =
+        document.querySelector('[aria-labelledby*="leaderboard"]') ||
+        document.querySelector('button[class*="leaderboard"]') ||
+        document.querySelector(
+          '[data-state="inactive"]:has(h1:contains("Leaderboard"))'
+        );
+
+      if (leaderboardTab) {
+        leaderboardTab.addEventListener("click", () => {
+          setTimeout(() => {
+            enhanceLeaderboardDisplay();
+          }, 500);
+        });
+      }
+    }, 3000);
   }
 })();
