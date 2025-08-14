@@ -19,9 +19,7 @@
   // Map of wallet addresses to player names
   const addressToNameMap = {
     "0x9a12a221350c7cf93be8eff22822e4a32f2d1675": "opeculiar",
-    // Add more mappings here as needed
-    // "0xd73acc2272f7524df092502b983001a199cc9d61": "player2",
-    // "0x46f18e7a2a4ba26e444d65ed8e9728d73d9faa20": "player3",
+    "0x4b02c462...3a7c7b98d2": "RubisC0",
   };
 
   function formatKeyName(key) {
@@ -44,13 +42,25 @@
     );
   }
 
-  function getDisplayName(address) {
-    // Check if we have a custom name mapping for this address
+  function getDisplayName(address, originalDisplayText) {
+    // Check if we have a custom name mapping for the full address
     if (addressToNameMap[address]) {
       return addressToNameMap[address];
     }
-    // Otherwise return the shortened address
-    return shortenWalletAddress(address);
+
+    // Also check if we have a mapping for the shortened address format
+    const shortAddress = shortenWalletAddress(address);
+    if (addressToNameMap[shortAddress]) {
+      return addressToNameMap[shortAddress];
+    }
+
+    // Check if the original display text itself has a mapping
+    if (addressToNameMap[originalDisplayText]) {
+      return addressToNameMap[originalDisplayText];
+    }
+
+    // Otherwise return the original display text (don't modify it)
+    return originalDisplayText;
   }
 
   function findPlayerByShortAddress(shortAddress, players) {
@@ -59,13 +69,23 @@
     }
 
     const foundPlayer = players.find((player) => {
-      // Check if the shortAddress matches a custom name
+      // Check if the shortAddress matches a custom name for the full address
       if (addressToNameMap[player.walletAddress] === shortAddress) {
         return true;
       }
 
-      // Otherwise check if it matches the shortened address
+      // Check if the shortAddress matches a custom name for the shortened address
       const playerShort = shortenWalletAddress(player.walletAddress);
+      if (addressToNameMap[playerShort] === shortAddress) {
+        return true;
+      }
+
+      // Check if the displayed shortAddress has a mapping (for cases like RubisC0)
+      if (addressToNameMap[shortAddress]) {
+        return playerShort === shortAddress;
+      }
+
+      // Otherwise check if it matches the shortened address format
       const cleanPlayerShort = playerShort.replace(/[^\w]/g, "");
       const cleanShortAddress = shortAddress.replace(/[^\w]/g, "");
       return cleanPlayerShort === cleanShortAddress;
@@ -159,7 +179,10 @@
 
           if (player) {
             // Replace address with custom name if available
-            const displayName = getDisplayName(player.walletAddress);
+            const displayName = getDisplayName(
+              player.walletAddress,
+              currentDisplayText
+            );
 
             // Only update if the display name is different from current text
             if (displayName !== currentDisplayText) {
@@ -223,7 +246,7 @@
         background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
         border-radius: 8px;
         padding: 8px 12px;
-        margin: 8px 0;
+        margin: 8px 0 20px 0;
         color: white;
         font-family: inherit;
         box-shadow: 0 2px 8px rgba(59, 130, 246, 0.2);
@@ -234,17 +257,17 @@
       `;
 
       // Create header
-      const header = document.createElement("div");
-      header.style.cssText = `
-        font-size: 12px;
-        font-weight: 600;
-        margin-bottom: 6px;
-        text-align: center;
-        opacity: 0.9;
-        letter-spacing: 0.5px;
-      `;
-      header.textContent = "🏆 Your Rankings";
-      rankInfoContainer.appendChild(header);
+      // const header = document.createElement("div");
+      // header.style.cssText = `
+      //   font-size: 12px;
+      //   font-weight: 600;
+      //   margin-bottom: 6px;
+      //   text-align: center;
+      //   opacity: 0.9;
+      //   letter-spacing: 0.5px;
+      // `;
+      // header.textContent = "🏆 Your Rankings";
+      // rankInfoContainer.appendChild(header);
 
       // Create stats grid
       const statsGrid = document.createElement("div");
@@ -267,37 +290,28 @@
 
       const currentApLabel = document.createElement("div");
       currentApLabel.style.cssText = `
-        font-size: 9px;
+        font-size: 8px;
         opacity: 0.8;
         margin-bottom: 2px;
         line-height: 1;
         font-weight: 500;
       `;
-      currentApLabel.textContent = "Current AP Held";
+      currentApLabel.textContent = "Current AP";
 
-      const currentApRank = document.createElement("div");
-      currentApRank.style.cssText = `
-        font-size: 14px;
+      const currentApInfo = document.createElement("div");
+      currentApInfo.style.cssText = `
+        font-size: 12px;
         font-weight: 700;
-        margin-bottom: 2px;
         line-height: 1;
       `;
-      currentApRank.textContent = currentAp.currentUserRank
+      const currentRankText = currentAp.currentUserRank
         ? `#${currentAp.currentUserRank}`
         : "N/A";
-
-      const currentApValue = document.createElement("div");
-      currentApValue.style.cssText = `
-        font-size: 10px;
-        opacity: 0.9;
-        line-height: 1;
-        font-weight: 500;
-      `;
-      currentApValue.textContent = formatAP(currentAp.currentUserValue || 0);
+      const currentApText = formatAP(currentAp.currentUserValue || 0);
+      currentApInfo.textContent = `${currentRankText} - ${currentApText}`;
 
       currentApStats.appendChild(currentApLabel);
-      currentApStats.appendChild(currentApRank);
-      currentApStats.appendChild(currentApValue);
+      currentApStats.appendChild(currentApInfo);
 
       // Total AP Earned stats
       const totalApStats = document.createElement("div");
@@ -312,37 +326,28 @@
 
       const totalApLabel = document.createElement("div");
       totalApLabel.style.cssText = `
-        font-size: 9px;
+        font-size: 8px;
         opacity: 0.8;
         margin-bottom: 2px;
         line-height: 1;
         font-weight: 500;
       `;
-      totalApLabel.textContent = "Total AP Earned";
+      totalApLabel.textContent = "Total AP";
 
-      const totalApRank = document.createElement("div");
-      totalApRank.style.cssText = `
-        font-size: 14px;
+      const totalApInfo = document.createElement("div");
+      totalApInfo.style.cssText = `
+        font-size: 12px;
         font-weight: 700;
-        margin-bottom: 2px;
         line-height: 1;
       `;
-      totalApRank.textContent = totalApEarned.currentUserRank
+      const totalRankText = totalApEarned.currentUserRank
         ? `#${totalApEarned.currentUserRank}`
         : "N/A";
-
-      const totalApValue = document.createElement("div");
-      totalApValue.style.cssText = `
-        font-size: 10px;
-        opacity: 0.9;
-        line-height: 1;
-        font-weight: 500;
-      `;
-      totalApValue.textContent = formatAP(totalApEarned.currentUserValue || 0);
+      const totalApText = formatAP(totalApEarned.currentUserValue || 0);
+      totalApInfo.textContent = `${totalRankText} - ${totalApText}`;
 
       totalApStats.appendChild(totalApLabel);
-      totalApStats.appendChild(totalApRank);
-      totalApStats.appendChild(totalApValue);
+      totalApStats.appendChild(totalApInfo);
 
       statsGrid.appendChild(currentApStats);
       statsGrid.appendChild(totalApStats);
@@ -488,10 +493,13 @@
       );
 
       plotButtons.forEach((button, index) => {
-        const labelsContainer = button.parentElement?.querySelector(
-          `.plot-labels-${index}`
+        const plotWrapper =
+          button.parentElement?.querySelector(`.plot-wrapper-${index}`) ||
+          button.closest(`.plot-wrapper-${index}`);
+        const topLabel = plotWrapper?.querySelector(`.plot-top-label-${index}`);
+        const bottomLabel = plotWrapper?.querySelector(
+          `.plot-bottom-label-${index}`
         );
-        if (!labelsContainer) return;
 
         // Get plot data from API
         if (
@@ -501,23 +509,24 @@
         ) {
           const plot = apiData[0].result.data.json.plots[index];
 
-          // Update modifier label
-          const modifierLabel =
-            labelsContainer.querySelector(".modifier-label");
-          if (modifierLabel && plot.modifier?.endsAt && plot.modifier?.key) {
+          // Update modifier label (top label)
+          if (topLabel && plot.modifier?.endsAt && plot.modifier?.key) {
             const modifierTime = calculateTimeRemaining(plot.modifier.endsAt);
             const timerKey = `modifier-${index}-${plot.modifier.key}`;
 
             if (modifierTime) {
-              modifierLabel.textContent = `${formatKeyName(
-                plot.modifier.key
-              )}\n${modifierTime}`;
+              topLabel.innerHTML = `
+                <div style="font-size: 8px; line-height: 1; margin-bottom: 1px; opacity: 0.9;">${formatKeyName(
+                  plot.modifier.key
+                )}</div>
+                <div style="font-size: 12px; line-height: 1; font-weight: bold;">${modifierTime}</div>
+              `;
 
               // Update colors based on time remaining
               const colors = getTimerColors(modifierTime, true);
-              modifierLabel.style.background = colors.background;
-              modifierLabel.style.color = colors.text;
-              modifierLabel.style.border = `1px solid ${colors.border}`;
+              topLabel.style.background = colors.background;
+              topLabel.style.color = colors.text;
+              topLabel.style.border = `1px solid ${colors.border}`;
 
               // Remove from notified set if timer is active again
               notifiedTimers.delete(timerKey);
@@ -527,26 +536,28 @@
                 playNotificationSound();
                 notifiedTimers.add(timerKey);
               }
-              modifierLabel.remove(); // Remove if expired
+              topLabel.remove(); // Remove if expired
             }
           }
 
-          // Update seed label
-          const seedLabel = labelsContainer.querySelector(".seed-label");
-          if (seedLabel && plot.seed?.endsAt && plot.seed?.key) {
+          // Update seed label (bottom label)
+          if (bottomLabel && plot.seed?.endsAt && plot.seed?.key) {
             const seedTime = calculateTimeRemaining(plot.seed.endsAt);
             const timerKey = `seed-${index}-${plot.seed.key}`;
 
             if (seedTime) {
-              seedLabel.textContent = `${formatKeyName(
-                plot.seed.key
-              )}\n${seedTime}`;
+              bottomLabel.innerHTML = `
+                <div style="font-size: 8px; line-height: 1; margin-bottom: 1px; opacity: 0.9;">${formatKeyName(
+                  plot.seed.key
+                )}</div>
+                <div style="font-size: 12px; line-height: 1; font-weight: bold;">${seedTime}</div>
+              `;
 
               // Update colors based on time remaining
               const colors = getTimerColors(seedTime, false);
-              seedLabel.style.background = colors.background;
-              seedLabel.style.color = colors.text;
-              seedLabel.style.border = `1px solid ${colors.border}`;
+              bottomLabel.style.background = colors.background;
+              bottomLabel.style.color = colors.text;
+              bottomLabel.style.border = `1px solid ${colors.border}`;
 
               // Remove from notified set if timer is active again
               notifiedTimers.delete(timerKey);
@@ -556,19 +567,47 @@
                 playNotificationSound();
                 notifiedTimers.add(timerKey);
               }
-              seedLabel.remove(); // Remove if expired
+              bottomLabel.remove(); // Remove if expired
             }
-          }
-
-          // Remove container if no labels left
-          if (labelsContainer.children.length === 0) {
-            labelsContainer.remove();
           }
         }
       });
     } catch (error) {
       console.error("Error in updateTimerLabels:", error);
     }
+  }
+
+  // Helper function to get or create plot wrapper
+  function getOrCreatePlotWrapper(button, index) {
+    // First check if button is already in a wrapper
+    let plotWrapper = button.closest(`.plot-wrapper-${index}`);
+    if (plotWrapper) {
+      return plotWrapper;
+    }
+
+    // Check if wrapper exists in parent
+    plotWrapper = button.parentElement?.querySelector(`.plot-wrapper-${index}`);
+    if (plotWrapper) {
+      return plotWrapper;
+    }
+
+    // Create new wrapper
+    plotWrapper = document.createElement("div");
+    plotWrapper.className = `plot-wrapper-${index}`;
+    plotWrapper.style.cssText = `
+      position: relative;
+      display: inline-block;
+      margin-bottom: 40px;
+    `;
+
+    // Wrap the button safely
+    const parent = button.parentElement;
+    if (parent) {
+      parent.insertBefore(plotWrapper, button);
+      plotWrapper.appendChild(button);
+    }
+
+    return plotWrapper;
   }
 
   function addLabels() {
@@ -585,12 +624,21 @@
       );
 
       plotButtons.forEach((button, index) => {
-        // Remove any existing labels below this button
-        const existingLabels = button.parentElement?.querySelector(
-          `.plot-labels-${index}`
+        // Remove any existing labels for this plot
+        const plotWrapper =
+          button.parentElement?.querySelector(`.plot-wrapper-${index}`) ||
+          button.closest(`.plot-wrapper-${index}`);
+        const existingTopLabel = plotWrapper?.querySelector(
+          `.plot-top-label-${index}`
         );
-        if (existingLabels) {
-          existingLabels.remove();
+        const existingBottomLabel = plotWrapper?.querySelector(
+          `.plot-bottom-label-${index}`
+        );
+        if (existingTopLabel) {
+          existingTopLabel.remove();
+        }
+        if (existingBottomLabel) {
+          existingBottomLabel.remove();
         }
 
         // Get plot data from API
@@ -605,7 +653,6 @@
           apiData[0].result.data.json.plots[index]
         ) {
           const plot = apiData[0].result.data.json.plots[index];
-
           if (plot.modifier?.endsAt) {
             modifierTime = calculateTimeRemaining(plot.modifier.endsAt);
             modifierKey = plot.modifier.key;
@@ -617,69 +664,86 @@
           }
         }
 
-        // Only create labels if we have data
-        if (modifierTime || seedTime) {
-          // Create labels container below the button
-          const labelsContainer = document.createElement("div");
-          labelsContainer.className = `plot-labels-${index}`;
-          labelsContainer.style.marginTop = "4px";
-          labelsContainer.style.display = "flex";
-          labelsContainer.style.flexDirection = "column";
-          labelsContainer.style.gap = "2px";
-          labelsContainer.style.alignItems = "center";
-          labelsContainer.style.fontSize = "10px";
-          labelsContainer.style.fontFamily =
-            "monospace, 'Courier New', monospace";
-          labelsContainer.style.fontWeight = "bold";
-          labelsContainer.style.width = "120px"; // Match button width
-
-          // Add modifier label if available
-          if (modifierTime && modifierKey) {
-            const colors = getTimerColors(modifierTime, true);
-            const modifierLabel = document.createElement("div");
-            modifierLabel.className = "time-label modifier-label";
-            modifierLabel.textContent = `${formatKeyName(
+        // Create booster timer above the plot if available
+        if (modifierTime && modifierKey) {
+          const colors = getTimerColors(modifierTime, true);
+          const modifierLabel = document.createElement("div");
+          modifierLabel.className = `time-label modifier-label plot-top-label-${index}`;
+          modifierLabel.innerHTML = `
+            <div style="font-size: 8px; line-height: 1; margin-bottom: 1px; opacity: 0.9;">${formatKeyName(
               modifierKey
-            )}\n${modifierTime}`;
-            modifierLabel.style.padding = "2px 3px";
-            modifierLabel.style.background = colors.background;
-            modifierLabel.style.color = colors.text;
-            modifierLabel.style.borderRadius = "3px";
-            modifierLabel.style.border = `1px solid ${colors.border}`;
-            modifierLabel.style.textAlign = "center";
-            modifierLabel.style.letterSpacing = "0.3px";
-            modifierLabel.style.width = "100%";
-            modifierLabel.style.whiteSpace = "pre-line";
-            modifierLabel.style.fontSize = "12px";
-            modifierLabel.style.lineHeight = "1.2";
-            labelsContainer.appendChild(modifierLabel);
-          }
+            )}</div>
+            <div style="font-size: 12px; line-height: 1; font-weight: bold;">${modifierTime}</div>
+          `;
+          modifierLabel.style.cssText = `
+            padding: 4px 6px;
+            background: ${colors.background};
+            color: ${colors.text};
+            border-radius: 4px;
+            border: 2px solid ${colors.border};
+            text-align: center;
+            letter-spacing: 0.3px;
+            font-size: 14px;
+            line-height: 1.2;
+            font-family: monospace, 'Courier New', monospace;
+            font-weight: bold;
+            position: absolute;
+            top: -25px;
+            left: 0;
+            right: 0;
+            margin: 0 auto;
+            width: fit-content;
+            min-width: 70px;
+            z-index: 2;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+          `;
 
-          // Add seed label if available
-          if (seedTime && seedKey) {
-            const colors = getTimerColors(seedTime, false);
-            const seedLabel = document.createElement("div");
-            seedLabel.className = "time-label seed-label";
-            seedLabel.textContent = `${formatKeyName(seedKey)}\n${seedTime}`;
-            seedLabel.style.padding = "2px 3px";
-            seedLabel.style.background = colors.background;
-            seedLabel.style.color = colors.text;
-            seedLabel.style.borderRadius = "3px";
-            seedLabel.style.border = `1px solid ${colors.border}`;
-            seedLabel.style.textAlign = "center";
-            seedLabel.style.letterSpacing = "0.3px";
-            seedLabel.style.width = "100%";
-            seedLabel.style.whiteSpace = "pre-line";
-            seedLabel.style.fontSize = "12px";
-            seedLabel.style.lineHeight = "1.2";
-            labelsContainer.appendChild(seedLabel);
-          }
+          // Get or create wrapper for this plot
+          const plotWrapper = getOrCreatePlotWrapper(button, index);
 
-          // Insert the labels container after the button in the flex container
-          button.parentElement?.insertBefore(
-            labelsContainer,
-            button.nextSibling
-          );
+          // Insert timer into the plot wrapper
+          plotWrapper.appendChild(modifierLabel);
+        }
+
+        // Create seed timer below the plot if available
+        if (seedTime && seedKey) {
+          const colors = getTimerColors(seedTime, false);
+          const seedLabel = document.createElement("div");
+          seedLabel.className = `time-label seed-label plot-bottom-label-${index}`;
+          seedLabel.innerHTML = `
+            <div style="font-size: 8px; line-height: 1; margin-bottom: 1px; opacity: 0.9;">${formatKeyName(
+              seedKey
+            )}</div>
+            <div style="font-size: 12px; line-height: 1; font-weight: bold;">${seedTime}</div>
+          `;
+          seedLabel.style.cssText = `
+            padding: 4px 6px;
+            background: ${colors.background};
+            color: ${colors.text};
+            border-radius: 4px;
+            border: 2px solid ${colors.border};
+            text-align: center;
+            letter-spacing: 0.3px;
+            font-size: 14px;
+            line-height: 1.2;
+            font-family: monospace, 'Courier New', monospace;
+            font-weight: bold;
+            position: absolute;
+            bottom: -25px;
+            left: 0;
+            right: 0;
+            margin: 0 auto;
+            width: fit-content;
+            min-width: 70px;
+            z-index: 2;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+          `;
+
+          // Get or create wrapper for this plot
+          const plotWrapper = getOrCreatePlotWrapper(button, index);
+
+          // Insert timer into the plot wrapper
+          plotWrapper.appendChild(seedLabel);
         }
       });
     } catch (error) {
@@ -689,9 +753,11 @@
 
   function updateLabels() {
     try {
-      // Remove old labels
+      // Remove old labels only (keep wrappers)
       document
-        .querySelectorAll('[class^="plot-labels-"]')
+        .querySelectorAll(
+          '[class^="plot-labels-"], [class*="plot-top-label-"], [class*="plot-bottom-label-"]'
+        )
         .forEach((el) => el.remove());
       addLabels();
     } catch (error) {
