@@ -243,13 +243,13 @@
       const rankInfoContainer = document.createElement("div");
       rankInfoContainer.className = "player-rank-info";
       rankInfoContainer.style.cssText = `
-        background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+        background: linear-gradient(135deg, #8B4513 0%, #654321 100%);
         border-radius: 8px;
         padding: 8px 12px;
         margin: 8px 0 20px 0;
         color: white;
         font-family: inherit;
-        box-shadow: 0 2px 8px rgba(59, 130, 246, 0.2);
+        box-shadow: 0 2px 8px rgba(139, 69, 19, 0.3);
         border: 1px solid rgba(255, 255, 255, 0.1);
         width: 100%;
         box-sizing: border-box;
@@ -453,34 +453,34 @@
 
     if (isBooster) {
       if (totalMinutes < 30) {
-        // Darker yellow/amber for urgent booster timers
+        // Urgent booster - warm red-orange
         return {
-          background: "rgba(255, 152, 0, 0.9)", // Dark orange
-          border: "#ff9800",
-          text: "#000",
+          background: "rgba(168, 85, 47, 0.95)", // Warm brown-red
+          border: "#8B4513",
+          text: "#FFF8DC",
         };
       } else {
-        // Normal yellow for booster timers
+        // Normal booster - warm tan/beige
         return {
-          background: "rgba(255, 193, 7, 0.9)", // Yellow/amber
-          border: "#ffc107",
-          text: "#000",
+          background: "rgba(205, 164, 113, 0.95)", // Warm tan
+          border: "#A0522D",
+          text: "#2F1B14",
         };
       }
     } else {
       if (totalMinutes < 30) {
-        // Darker green for urgent seed timers
+        // Urgent seed - deep forest green
         return {
-          background: "rgba(27, 94, 32, 0.9)", // Dark green
-          border: "#1b5e20",
-          text: "#fff",
+          background: "rgba(85, 107, 47, 0.95)", // Dark olive green
+          border: "#556B2F",
+          text: "#F0F8E8",
         };
       } else {
-        // Normal green for seed timers
+        // Normal seed - sage green
         return {
-          background: "rgba(76, 175, 80, 0.9)", // Green
-          border: "#4caf50",
-          text: "#fff",
+          background: "rgba(143, 158, 97, 0.95)", // Sage green
+          border: "#8FBC8F",
+          text: "#2F4F2F",
         };
       }
     }
