@@ -5,6 +5,14 @@
   const LEADERBOARD_API_URL =
     "https://app.appleville.xyz/api/trpc/stats.getLeaderboard?batch=20";
 
+  // Telegram Bot Configuration
+  // You need to replace these with your actual bot token and chat ID
+  const TELEGRAM_BOT_TOKEN = "YOUR_BOT_TOKEN_HERE"; // Replace with your bot token
+  const TELEGRAM_CHAT_ID = "YOUR_CHAT_ID_HERE"; // Replace with your chat ID
+  
+  // Set to true to enable Telegram notifications
+  const ENABLE_TELEGRAM_NOTIFICATIONS = true; // Set to true when you have your bot set up
+
   // Safety mechanism to prevent excessive updates
   let lastUpdateTime = 0;
   const MIN_UPDATE_INTERVAL = 1000; // Minimum 1 second between updates
@@ -15,12 +23,83 @@
 
   // Track which timers have already notified to prevent multiple beeps
   let notifiedTimers = new Set();
+  
+  // Track which timers have already sent Telegram notifications
+  let telegramNotifiedTimers = new Set();
 
   // Map of wallet addresses to player names
   const addressToNameMap = {
     "0x9a12a221350c7cf93be8eff22822e4a32f2d1675": "opeculiar",
     "0x4b02c462...3a7c7b98d2": "RubisC0",
   };
+
+  // Telegram notification functions
+  async function sendTelegramNotification(message) {
+    const botToken = window.TELEGRAM_BOT_TOKEN || TELEGRAM_BOT_TOKEN;
+    const chatId = window.TELEGRAM_CHAT_ID || TELEGRAM_CHAT_ID;
+    const isEnabled = window.ENABLE_TELEGRAM_NOTIFICATIONS !== undefined ? 
+      window.ENABLE_TELEGRAM_NOTIFICATIONS : ENABLE_TELEGRAM_NOTIFICATIONS;
+    
+    if (!isEnabled || !botToken || !chatId) {
+      console.log('❌ Cannot send notification - missing configuration');
+      return;
+    }
+
+    console.log('📤 Sending Telegram notification...');
+    console.log('Message:', message);
+
+    try {
+      const url = `https://api.telegram.org/bot${botToken}/sendMessage`;
+      console.log('API URL:', url);
+      
+      const requestBody = {
+        chat_id: chatId,
+        text: message,
+        parse_mode: 'HTML'
+      };
+      console.log('Request body:', requestBody);
+
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(requestBody)
+      });
+
+      console.log('Response status:', response.status);
+      console.log('Response ok:', response.ok);
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.log('Error response:', errorText);
+        throw new Error(`Telegram API error: ${response.status} - ${errorText}`);
+      }
+
+      const result = await response.json();
+      console.log('API response:', result);
+      
+      if (!result.ok) {
+        throw new Error(`Telegram API error: ${result.description}`);
+      }
+      
+      console.log('✅ Telegram notification sent successfully!');
+    } catch (error) {
+      console.error('❌ Failed to send Telegram notification:', error);
+      console.error('Full error details:', error.message);
+    }
+  }
+
+  function formatTimerExpiredMessage(plotIndex, timerType, timerKey) {
+    const plotNumber = plotIndex + 1;
+    const timerName = formatKeyName(timerKey);
+    
+    if (timerType === 'modifier') {
+      return `🚨 <b>Booster Expired!</b>\n\nPlot ${plotNumber}: ${timerName} has finished.\n\nTime to check your plots!`;
+    } else {
+      return `🌱 <b>Seed Expired!</b>\n\nPlot ${plotNumber}: ${timerName} has finished.\n\nTime to plant new seeds!`;
+    }
+  }
 
   function formatKeyName(key) {
     if (!key) return "";
@@ -543,13 +622,25 @@
 
               // Remove from notified set if timer is active again
               notifiedTimers.delete(timerKey);
+              telegramNotifiedTimers.delete(timerKey);
             } else {
               // Timer expired - check if we should notify
               if (!notifiedTimers.has(timerKey)) {
                 playNotificationSound();
                 notifiedTimers.add(timerKey);
               }
-              topLabel.remove(); // Remove if expired
+              
+              // Send Telegram notification if not already sent
+              if (!telegramNotifiedTimers.has(timerKey)) {
+                const message = formatTimerExpiredMessage(index, 'modifier', plot.modifier.key);
+                sendTelegramNotification(message);
+                telegramNotifiedTimers.add(timerKey);
+              }
+              
+              // Mark label for removal but don't remove immediately
+              // This prevents breaking the expiry detection loop
+              topLabel.style.display = 'none';
+              topLabel.dataset.expired = 'true';
             }
           }
 
@@ -574,13 +665,25 @@
 
               // Remove from notified set if timer is active again
               notifiedTimers.delete(timerKey);
+              telegramNotifiedTimers.delete(timerKey);
             } else {
               // Timer expired - check if we should notify
               if (!notifiedTimers.has(timerKey)) {
                 playNotificationSound();
                 notifiedTimers.add(timerKey);
               }
-              bottomLabel.remove(); // Remove if expired
+              
+              // Send Telegram notification if not already sent
+              if (!telegramNotifiedTimers.has(timerKey)) {
+                const message = formatTimerExpiredMessage(index, 'seed', plot.seed.key);
+                sendTelegramNotification(message);
+                telegramNotifiedTimers.add(timerKey);
+              }
+              
+              // Mark label for removal but don't remove immediately
+              // This prevents breaking the expiry detection loop
+              bottomLabel.style.display = 'none';
+              bottomLabel.dataset.expired = 'true';
             }
           }
         }
@@ -785,6 +888,20 @@
     updateTimeout = setTimeout(updateLabels, 100);
   }
 
+  // Clean up expired labels without breaking notification logic
+  function cleanupExpiredLabels() {
+    try {
+      const expiredLabels = document.querySelectorAll('[data-expired="true"]');
+      expiredLabels.forEach(label => {
+        if (label.parentNode) {
+          label.parentNode.removeChild(label);
+        }
+      });
+    } catch (error) {
+      // Silent error handling
+    }
+  }
+
   function fetchAPI() {
     fetch(API_URL, {
       method: "GET",
@@ -859,8 +976,15 @@
     createPlayerRankInfo();
   }
 
+  // Load saved Telegram settings and create settings button
+  loadSavedSettings();
+  createSettingsButton();
+
   // Update timer labels every second (for smooth seconds countdown)
   setInterval(updateTimerLabels, 1000);
+
+  // Clean up expired labels every 10 seconds (less frequent to avoid interference)
+  setInterval(cleanupExpiredLabels, 10000);
 
   // Update leaderboard display and player rank info every 5 seconds
   setInterval(() => {
@@ -886,6 +1010,11 @@
   // Make functions globally accessible for manual testing and management
   window.enhanceLeaderboardDisplay = enhanceLeaderboardDisplay;
   window.createPlayerRankInfo = createPlayerRankInfo;
+  window.createSettingsPanel = createSettingsPanel;
+  window.createSettingsButton = createSettingsButton;
+  
+  // Utility functions
+  window.cleanupExpiredLabels = cleanupExpiredLabels;
 
   // Helper function to add new address mappings
   window.addPlayerName = function (address, name) {
@@ -898,6 +1027,513 @@
       });
     enhanceLeaderboardDisplay();
   };
+
+  // Helper function to test Telegram notifications
+  window.testTelegramNotification = function() {
+    console.log('=== Testing Telegram Bot ===');
+    
+    const botToken = window.TELEGRAM_BOT_TOKEN || TELEGRAM_BOT_TOKEN;
+    const chatId = window.TELEGRAM_CHAT_ID || TELEGRAM_CHAT_ID;
+    const isEnabled = window.ENABLE_TELEGRAM_NOTIFICATIONS !== undefined ? 
+      window.ENABLE_TELEGRAM_NOTIFICATIONS : ENABLE_TELEGRAM_NOTIFICATIONS;
+    
+    console.log('Bot Token:', botToken ? `${botToken.substring(0, 10)}...` : 'NOT SET');
+    console.log('Chat ID:', chatId || 'NOT SET');
+    console.log('Notifications Enabled:', isEnabled);
+    
+    if (!isEnabled) {
+      console.log('❌ Telegram notifications are disabled. Enable them in the settings panel.');
+      return;
+    }
+    
+    if (!botToken || botToken === "YOUR_BOT_TOKEN_HERE") {
+      console.log('❌ Bot token not configured. Please enter your bot token in the settings panel.');
+      return;
+    }
+    
+    if (!chatId || chatId === "YOUR_CHAT_ID_HERE") {
+      console.log('❌ Chat ID not configured. Please enter your chat ID in the settings panel.');
+      return;
+    }
+    
+    console.log('✅ Configuration looks good, sending test message...');
+    
+    const testMessage = `🧪 <b>Test Notification</b>\n\nThis is a test message from your Appleville Extension.\n\nIf you receive this, your Telegram bot is working correctly!`;
+    sendTelegramNotification(testMessage);
+    console.log('📤 Test Telegram notification sent! Check your Telegram app.');
+  };
+
+  // Helper function to verify bot token and chat ID
+  window.verifyTelegramConfig = async function() {
+    console.log('=== Verifying Telegram Configuration ===');
+    
+    const botToken = window.TELEGRAM_BOT_TOKEN || TELEGRAM_BOT_TOKEN;
+    const chatId = window.TELEGRAM_CHAT_ID || TELEGRAM_CHAT_ID;
+    
+    if (!botToken || botToken === "YOUR_BOT_TOKEN_HERE") {
+      console.log('❌ Bot token not configured');
+      return false;
+    }
+    
+    if (!chatId || chatId === "YOUR_CHAT_ID_HERE") {
+      console.log('❌ Chat ID not configured');
+      return false;
+    }
+    
+    console.log('🔍 Testing bot token...');
+    
+    try {
+      // Test 1: Check if bot token is valid
+      const getMeUrl = `https://api.telegram.org/bot${botToken}/getMe`;
+      console.log('Testing bot token with:', getMeUrl);
+      
+      const getMeResponse = await fetch(getMeUrl);
+      const getMeResult = await getMeResponse.json();
+      
+      if (!getMeResult.ok) {
+        console.log('❌ Invalid bot token:', getMeResult.description);
+        return false;
+      }
+      
+      console.log('✅ Bot token is valid!');
+      console.log('Bot info:', getMeResult.result);
+      
+      // Test 2: Check if chat ID is accessible
+      console.log('🔍 Testing chat ID...');
+      const getChatUrl = `https://api.telegram.org/bot${botToken}/getChat?chat_id=${chatId}`;
+      console.log('Testing chat ID with:', getChatUrl);
+      
+      const getChatResponse = await fetch(getChatUrl);
+      const getChatResult = await getChatResponse.json();
+      
+      if (!getChatResult.ok) {
+        console.log('❌ Chat ID error:', getChatResult.description);
+        console.log('💡 Make sure you have started a conversation with your bot');
+        return false;
+      }
+      
+      console.log('✅ Chat ID is valid!');
+      console.log('Chat info:', getChatResult.result);
+      
+      console.log('🎉 All tests passed! Your configuration is correct.');
+      return true;
+      
+    } catch (error) {
+      console.error('❌ Error during verification:', error);
+      return false;
+    }
+  };
+
+  // Helper function to configure Telegram bot
+  window.configureTelegramBot = function(botToken, chatId) {
+    if (botToken && chatId) {
+      // Update the constants (this will only work for the current session)
+      window.TELEGRAM_BOT_TOKEN = botToken;
+      window.TELEGRAM_CHAT_ID = chatId;
+      window.ENABLE_TELEGRAM_NOTIFICATIONS = true;
+      console.log('Telegram bot configured successfully!');
+      console.log('Note: This configuration will reset when you refresh the page.');
+      console.log('To make it permanent, update the constants in the code.');
+    } else {
+      console.log('Please provide both bot token and chat ID');
+    }
+  };
+
+  // Create settings panel UI
+  function createSettingsPanel() {
+    // Remove existing settings panel if present
+    const existingPanel = document.querySelector('.telegram-settings-panel');
+    if (existingPanel) {
+      existingPanel.remove();
+    }
+
+    const settingsPanel = document.createElement('div');
+    settingsPanel.className = 'telegram-settings-panel';
+    settingsPanel.style.cssText = `
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      background: linear-gradient(135deg, #8B4513 0%, #654321 100%);
+      border-radius: 12px;
+      padding: 16px;
+      color: white;
+      font-family: inherit;
+      box-shadow: 0 4px 20px rgba(139, 69, 19, 0.4);
+      border: 2px solid rgba(255, 255, 255, 0.2);
+      backdrop-filter: blur(10px);
+      width: 300px;
+      z-index: 10000;
+      max-height: 80vh;
+      overflow-y: auto;
+    `;
+
+    // Header
+    const header = document.createElement('div');
+    header.style.cssText = `
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 16px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+    `;
+
+    const title = document.createElement('h3');
+    title.textContent = '🔔 Notification Settings';
+    title.style.cssText = `
+      margin: 0;
+      font-size: 16px;
+      font-weight: 600;
+      color: #FFF8DC;
+    `;
+
+    const closeBtn = document.createElement('button');
+    closeBtn.innerHTML = '✕';
+    closeBtn.style.cssText = `
+      background: rgba(255, 255, 255, 0.2);
+      border: none;
+      color: white;
+      border-radius: 50%;
+      width: 24px;
+      height: 24px;
+      cursor: pointer;
+      font-size: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background 0.2s;
+    `;
+    closeBtn.onmouseover = () => closeBtn.style.background = 'rgba(255, 255, 255, 0.3)';
+    closeBtn.onmouseout = () => closeBtn.style.background = 'rgba(255, 255, 255, 0.2)';
+    closeBtn.onclick = () => settingsPanel.remove();
+
+    header.appendChild(title);
+    header.appendChild(closeBtn);
+    settingsPanel.appendChild(header);
+
+    // Telegram Bot Token Input
+    const tokenSection = document.createElement('div');
+    tokenSection.style.cssText = 'margin-bottom: 16px;';
+
+    const tokenLabel = document.createElement('label');
+    tokenLabel.textContent = 'Bot Token:';
+    tokenLabel.style.cssText = `
+      display: block;
+      margin-bottom: 6px;
+      font-size: 12px;
+      font-weight: 500;
+      color: #FFF8DC;
+    `;
+
+    const tokenInput = document.createElement('input');
+    tokenInput.type = 'password';
+    tokenInput.placeholder = 'Enter your bot token';
+    tokenInput.value = window.TELEGRAM_BOT_TOKEN || TELEGRAM_BOT_TOKEN;
+    tokenInput.style.cssText = `
+      width: 100%;
+      padding: 8px 12px;
+      border: 1px solid rgba(255, 255, 255, 0.3);
+      border-radius: 6px;
+      background: rgba(255, 255, 255, 0.1);
+      color: white;
+      font-size: 12px;
+      box-sizing: border-box;
+    `;
+    tokenInput.onfocus = () => tokenInput.style.borderColor = 'rgba(255, 255, 255, 0.6)';
+    tokenInput.onblur = () => tokenInput.style.borderColor = 'rgba(255, 255, 255, 0.3)';
+
+    tokenSection.appendChild(tokenLabel);
+    tokenSection.appendChild(tokenInput);
+    settingsPanel.appendChild(tokenSection);
+
+    // Chat ID Input
+    const chatIdSection = document.createElement('div');
+    chatIdSection.style.cssText = 'margin-bottom: 16px;';
+
+    const chatIdLabel = document.createElement('label');
+    chatIdLabel.textContent = 'Chat ID:';
+    chatIdLabel.style.cssText = `
+      display: block;
+      margin-bottom: 6px;
+      font-size: 12px;
+      font-weight: 500;
+      color: #FFF8DC;
+    `;
+
+    const chatIdInput = document.createElement('input');
+    chatIdInput.type = 'text';
+    chatIdInput.placeholder = 'Enter your chat ID';
+    chatIdInput.value = window.TELEGRAM_CHAT_ID || TELEGRAM_CHAT_ID;
+    chatIdInput.style.cssText = `
+      width: 100%;
+      padding: 8px 12px;
+      border: 1px solid rgba(255, 255, 255, 0.3);
+      border-radius: 6px;
+      background: rgba(255, 255, 255, 0.1);
+      color: white;
+      font-size: 12px;
+      box-sizing: border-box;
+    `;
+    chatIdInput.onfocus = () => chatIdInput.style.borderColor = 'rgba(255, 255, 255, 0.6)';
+    chatIdInput.onblur = () => chatIdInput.style.borderColor = 'rgba(255, 255, 255, 0.3)';
+
+    chatIdSection.appendChild(chatIdLabel);
+    chatIdSection.appendChild(chatIdInput);
+    settingsPanel.appendChild(chatIdSection);
+
+    // Toggle Switch
+    const toggleSection = document.createElement('div');
+    toggleSection.style.cssText = 'margin-bottom: 16px;';
+
+    const toggleLabel = document.createElement('label');
+    toggleLabel.textContent = 'Enable Telegram Notifications:';
+    toggleLabel.style.cssText = `
+      display: block;
+      margin-bottom: 8px;
+      font-size: 12px;
+      font-weight: 500;
+      color: #FFF8DC;
+    `;
+
+    const toggleContainer = document.createElement('div');
+    toggleContainer.style.cssText = `
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    `;
+
+    const toggleSwitch = document.createElement('input');
+    toggleSwitch.type = 'checkbox';
+    toggleSwitch.checked = window.ENABLE_TELEGRAM_NOTIFICATIONS !== undefined ? 
+      window.ENABLE_TELEGRAM_NOTIFICATIONS : ENABLE_TELEGRAM_NOTIFICATIONS;
+    toggleSwitch.style.cssText = `
+      width: 40px;
+      height: 20px;
+      appearance: none;
+      background: rgba(255, 255, 255, 0.2);
+      border-radius: 10px;
+      position: relative;
+      cursor: pointer;
+      transition: background 0.3s;
+    `;
+
+    // Custom toggle switch styling
+    toggleSwitch.onchange = function() {
+      if (this.checked) {
+        this.style.background = '#4CAF50';
+      } else {
+        this.style.background = 'rgba(255, 255, 255, 0.2)';
+      }
+    };
+
+    // Apply initial state
+    if (toggleSwitch.checked) {
+      toggleSwitch.style.background = '#4CAF50';
+    }
+
+    const toggleText = document.createElement('span');
+    toggleText.textContent = toggleSwitch.checked ? 'ON' : 'OFF';
+    toggleText.style.cssText = `
+      font-size: 12px;
+      font-weight: 600;
+      color: ${toggleSwitch.checked ? '#4CAF50' : '#ccc'};
+    `;
+
+    toggleSwitch.onchange = function() {
+      if (this.checked) {
+        this.style.background = '#4CAF50';
+        toggleText.textContent = 'ON';
+        toggleText.style.color = '#4CAF50';
+      } else {
+        this.style.background = 'rgba(255, 255, 255, 0.2)';
+        toggleText.textContent = 'OFF';
+        toggleText.style.color = '#ccc';
+      }
+    };
+
+    toggleContainer.appendChild(toggleSwitch);
+    toggleContainer.appendChild(toggleText);
+    toggleSection.appendChild(toggleLabel);
+    toggleSection.appendChild(toggleContainer);
+    settingsPanel.appendChild(toggleSection);
+
+    // Buttons
+    const buttonSection = document.createElement('div');
+    buttonSection.style.cssText = `
+      display: flex;
+      gap: 8px;
+      margin-bottom: 16px;
+    `;
+
+    const testBtn = document.createElement('button');
+    testBtn.textContent = 'Test Bot';
+    testBtn.style.cssText = `
+      flex: 1;
+      padding: 8px 12px;
+      background: #4CAF50;
+      border: none;
+      border-radius: 6px;
+      color: white;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s;
+    `;
+    testBtn.onmouseover = () => testBtn.style.background = '#45a049';
+    testBtn.onmouseout = () => testBtn.style.background = '#4CAF50';
+    testBtn.onclick = () => {
+      const token = tokenInput.value.trim();
+      const chatId = chatIdInput.value.trim();
+      if (token && chatId) {
+        window.TELEGRAM_BOT_TOKEN = token;
+        window.TELEGRAM_CHAT_ID = chatId;
+        window.ENABLE_TELEGRAM_NOTIFICATIONS = true;
+        testTelegramNotification();
+      } else {
+        alert('Please enter both bot token and chat ID');
+      }
+    };
+
+    const saveBtn = document.createElement('button');
+    saveBtn.textContent = 'Save Settings';
+    saveBtn.style.cssText = `
+      flex: 1;
+      padding: 8px 12px;
+      background: #2196F3;
+      border: none;
+      border-radius: 6px;
+      color: white;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s;
+    `;
+    saveBtn.onmouseover = () => saveBtn.style.background = '#1976D2';
+    saveBtn.onmouseout = () => saveBtn.style.background = '#2196F3';
+    saveBtn.onclick = () => {
+      const token = tokenInput.value.trim();
+      const chatId = chatIdInput.value.trim();
+      const enabled = toggleSwitch.checked;
+      
+      if (token && chatId) {
+        window.TELEGRAM_BOT_TOKEN = token;
+        window.TELEGRAM_CHAT_ID = chatId;
+        window.ENABLE_TELEGRAM_NOTIFICATIONS = enabled;
+        
+        // Save to localStorage for persistence
+        try {
+          localStorage.setItem('telegramBotToken', token);
+          localStorage.setItem('telegramChatId', chatId);
+          localStorage.setItem('telegramNotificationsEnabled', enabled);
+        } catch (e) {
+          console.log('Could not save to localStorage');
+        }
+        
+        alert('Settings saved successfully!');
+      } else {
+        alert('Please enter both bot token and chat ID');
+      }
+    };
+
+    buttonSection.appendChild(testBtn);
+    buttonSection.appendChild(saveBtn);
+    settingsPanel.appendChild(buttonSection);
+
+    // Help text
+    const helpText = document.createElement('div');
+    helpText.style.cssText = `
+      font-size: 10px;
+      color: rgba(255, 255, 255, 0.7);
+      line-height: 1.4;
+      border-top: 1px solid rgba(255, 255, 255, 0.2);
+      padding-top: 12px;
+    `;
+    helpText.innerHTML = `
+      <strong>How to set up:</strong><br>
+      1. Create a bot with @BotFather<br>
+      2. Get your bot token<br>
+      3. Send a message to your bot<br>
+      4. Get your chat ID from the API<br>
+      5. Save and test!
+    `;
+    settingsPanel.appendChild(helpText);
+
+    // Add to page
+    document.body.appendChild(settingsPanel);
+
+    return settingsPanel;
+  }
+
+  // Load saved settings from localStorage
+  function loadSavedSettings() {
+    try {
+      const savedToken = localStorage.getItem('telegramBotToken');
+      const savedChatId = localStorage.getItem('telegramChatId');
+      const savedEnabled = localStorage.getItem('telegramNotificationsEnabled');
+      
+      if (savedToken && savedChatId) {
+        window.TELEGRAM_BOT_TOKEN = savedToken;
+        window.TELEGRAM_CHAT_ID = savedChatId;
+        window.ENABLE_TELEGRAM_NOTIFICATIONS = savedEnabled === 'true';
+        
+        // Update the constants for the current session
+        if (window.ENABLE_TELEGRAM_NOTIFICATIONS) {
+          console.log('Telegram notifications loaded from saved settings');
+        }
+      }
+    } catch (e) {
+      console.log('Could not load saved settings');
+    }
+  }
+
+  // Create settings button
+  function createSettingsButton() {
+    // Remove existing button if present
+    const existingBtn = document.querySelector('.telegram-settings-btn');
+    if (existingBtn) {
+      existingBtn.remove();
+    }
+
+    const settingsBtn = document.createElement('button');
+    settingsBtn.className = 'telegram-settings-btn';
+    settingsBtn.innerHTML = '🔔';
+    settingsBtn.title = 'Telegram Notification Settings';
+    settingsBtn.style.cssText = `
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      width: 50px;
+      height: 50px;
+      background: linear-gradient(135deg, #8B4513 0%, #654321 100%);
+      border: 2px solid rgba(255, 255, 255, 0.3);
+      border-radius: 50%;
+      color: white;
+      font-size: 20px;
+      cursor: pointer;
+      z-index: 9999;
+      box-shadow: 0 4px 15px rgba(139, 69, 19, 0.4);
+      transition: all 0.3s ease;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    `;
+
+    settingsBtn.onmouseover = () => {
+      settingsBtn.style.transform = 'scale(1.1)';
+      settingsBtn.style.boxShadow = '0 6px 20px rgba(139, 69, 19, 0.6)';
+    };
+
+    settingsBtn.onmouseout = () => {
+      settingsBtn.style.transform = 'scale(1)';
+      settingsBtn.style.boxShadow = '0 4px 15px rgba(139, 69, 19, 0.4)';
+    };
+
+    settingsBtn.onclick = () => {
+      createSettingsPanel();
+    };
+
+    document.body.appendChild(settingsBtn);
+  }
 
   // Refresh API data every 5 seconds
   setInterval(fetchAPI, 5000);
@@ -987,6 +1623,12 @@
       setTimeout(fetchAPI, 2000);
       setTimeout(fetchLeaderboardAPI, 2000); // Schedule leaderboard fetch
 
+      // Load saved Telegram settings and create settings button
+      setTimeout(() => {
+        loadSavedSettings();
+        createSettingsButton();
+      }, 1000);
+
       // Add click listener for leaderboard tab
       setTimeout(() => {
         const leaderboardTab =
@@ -1011,6 +1653,12 @@
   } else {
     setTimeout(fetchAPI, 2000);
     setTimeout(fetchLeaderboardAPI, 2000); // Schedule leaderboard fetch
+
+    // Load saved Telegram settings and create settings button
+    setTimeout(() => {
+      loadSavedSettings();
+      createSettingsButton();
+    }, 1000);
 
     // Add click listener for leaderboard tab
     setTimeout(() => {
