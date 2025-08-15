@@ -11,7 +11,7 @@
   const TELEGRAM_CHAT_ID = "YOUR_CHAT_ID_HERE"; // Replace with your chat ID
   
   // Set to true to enable Telegram notifications
-  const ENABLE_TELEGRAM_NOTIFICATIONS = false; // Set to true when you have your bot set up
+  const ENABLE_TELEGRAM_NOTIFICATIONS = true; // Set to true when you have your bot set up
 
   // Safety mechanism to prevent excessive updates
   let lastUpdateTime = 0;
@@ -637,7 +637,10 @@
                 telegramNotifiedTimers.add(timerKey);
               }
               
-              topLabel.remove(); // Remove if expired
+              // Mark label for removal but don't remove immediately
+              // This prevents breaking the expiry detection loop
+              topLabel.style.display = 'none';
+              topLabel.dataset.expired = 'true';
             }
           }
 
@@ -677,7 +680,10 @@
                 telegramNotifiedTimers.add(timerKey);
               }
               
-              bottomLabel.remove(); // Remove if expired
+              // Mark label for removal but don't remove immediately
+              // This prevents breaking the expiry detection loop
+              bottomLabel.style.display = 'none';
+              bottomLabel.dataset.expired = 'true';
             }
           }
         }
@@ -882,6 +888,20 @@
     updateTimeout = setTimeout(updateLabels, 100);
   }
 
+  // Clean up expired labels without breaking notification logic
+  function cleanupExpiredLabels() {
+    try {
+      const expiredLabels = document.querySelectorAll('[data-expired="true"]');
+      expiredLabels.forEach(label => {
+        if (label.parentNode) {
+          label.parentNode.removeChild(label);
+        }
+      });
+    } catch (error) {
+      // Silent error handling
+    }
+  }
+
   function fetchAPI() {
     fetch(API_URL, {
       method: "GET",
@@ -963,6 +983,9 @@
   // Update timer labels every second (for smooth seconds countdown)
   setInterval(updateTimerLabels, 1000);
 
+  // Clean up expired labels every 10 seconds (less frequent to avoid interference)
+  setInterval(cleanupExpiredLabels, 10000);
+
   // Update leaderboard display and player rank info every 5 seconds
   setInterval(() => {
     if (leaderboardData) {
@@ -989,6 +1012,9 @@
   window.createPlayerRankInfo = createPlayerRankInfo;
   window.createSettingsPanel = createSettingsPanel;
   window.createSettingsButton = createSettingsButton;
+  
+  // Utility functions
+  window.cleanupExpiredLabels = cleanupExpiredLabels;
 
   // Helper function to add new address mappings
   window.addPlayerName = function (address, name) {
